@@ -1,9 +1,25 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
 
-PROJECT(Surround360Render CXX)
+include("cmake/Hunter/HunterGate.cmake")
 
-FIND_PACKAGE(OpenCV)
+HunterGate(
+    URL "https://github.com/ruslo/hunter/archive/v0.16.24.tar.gz"
+    SHA1 "00ab627d3d4fe5151e15b6ab2b1b1da17650984a"
+	LOCAL
+)
+
+PROJECT(Surround360Render)
+
+hunter_add_package(OpenCV)
+FIND_PACKAGE(OpenCV CONFIG)
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
+
+hunter_add_package(gflags)
+find_package(gflags CONFIG)
+
+hunter_add_package(glog)
+FIND_PACKAGE(glog CONFIG)
+
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/util)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/optical_flow)

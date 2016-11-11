@@ -9,13 +9,19 @@
 
 #include "SystemUtil.h"
 
+#ifndef WIN32
 #include <execinfo.h>
+#endif
+
 #include <signal.h>
 
 #include <exception>
 #include <stdexcept>
 
+#ifndef WIN32
 #include <gflags/gflags.h>
+#endif
+
 #include <glog/logging.h>
 
 namespace fLB {
