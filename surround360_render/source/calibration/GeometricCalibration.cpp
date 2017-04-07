@@ -4,8 +4,6 @@
 #include <array>
 #define BOOST_FILESYSTEM_NO_DEPRECATED
 #include <boost/filesystem.hpp>
-//#include <folly/FileUtil.h>
-//#include <folly/json.h>
 #include "opencv2/opencv.hpp"
 #include "opencv2/stitching/detail/matchers.hpp"
 #include "ceres/ceres.h"
@@ -79,13 +77,6 @@ std::string makeArtificialPath(int frame, const std::string id) {
 cv::Mat loadImage(const boost::filesystem::path& path) {
   return cv::imread((FLAGS_frames / path).string());
 }
-
-//folly::dynamic parseJsonFile(const std::string& path) {
-//  std::string json;
-//  folly::readFile(path.c_str(), json);
-//  CHECK(!json.empty()) << "could not read JSON file: " << path;
-//  return folly::parseJson(json);
-//}
 
 json::Value parseJsonFile(const std::string& path)
 {
@@ -190,7 +181,6 @@ struct Overlap {
   }
 };
 
-//std::vector<Overlap> loadOverlaps(const folly::dynamic& parsed)
 std::vector<Overlap> loadOverlaps(const json::Value &parsed)
 {
   std::vector<Overlap> result;

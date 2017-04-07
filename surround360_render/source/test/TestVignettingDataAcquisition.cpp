@@ -18,8 +18,6 @@
 #include "SystemUtil.h"
 #include "VrCamException.h"
 
-//#include <folly/FileUtil.h>
-//#include <folly/json.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -42,7 +40,6 @@ void saveToJson(
     const vector<Vec3f>& medians,
     const string& filename) {
 
-//  folly::dynamic serialized = folly::dynamic::array;
     json::Array serialized;
   for (int i = 0; i < locations.size(); ++i) {
     const Point2f& loc = locations[i];

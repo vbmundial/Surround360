@@ -10,7 +10,6 @@
 #pragma once
 
 #include <assert.h>
-//#include <dirent.h>
 #include <math.h>
 
 #include <chrono>

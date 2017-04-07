@@ -12,9 +12,6 @@
 #include <algorithm>
 
 #include <Eigen/Geometry>
-//#include <folly/dynamic.h>
-//#include <folly/FileUtil.h>
-//#include <folly/json.h>
 #include <json.h>
 #include <glog/logging.h>
 
