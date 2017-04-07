@@ -8,6 +8,8 @@
 */
 
 #include "Camera.h"
+#include <fstream>
+#include <sstream>
 
 namespace surround360 {
 
@@ -39,8 +41,9 @@ Camera::Camera(const Type type, const Vector2& res, const Vector2& focal):
   setDefaultFov();
 }
 
-Camera::Camera(const folly::dynamic& json) {
-  CHECK_GE(json["version"], 1);
+Camera::Camera(const json::Value &json)
+{
+  CHECK_GE(json["version"].ToInt(), 1);
 
   type = deserializeType(json["type"]);
 
@@ -53,56 +56,53 @@ Camera::Camera(const folly::dynamic& json) {
 
   resolution = deserializeVector<2>(json["resolution"]);
 
-  if (json.count("principal")) {
+  if (json.HasKey("principal"))
     principal = deserializeVector<2>(json["principal"]);
-  } else {
+  else
     principal = resolution / 2;
-  }
-
-  if (json.count("distortion")) {
+  
+  if (json.HasKey("distortion"))
     distortion = deserializeVector<2>(json["distortion"]);
-  } else {
+  else
     distortion.setZero();
-  }
 
-  if (json.count("fov")) {
-    setFov(json["fov"].asDouble());
-  } else {
+  if (json.HasKey("fov"))
+    setFov(json["fov"].ToDouble());
+  else
     setDefaultFov();
-  }
 
   focal = deserializeVector<2>(json["focal"]);
 
-  id = json["id"].getString();
+  id = json["id"].ToString();
 
-  if (json.count("group")) {
-    group = json["group"].getString();
+  if (json.HasKey("group")) {
+    group = json["group"].ToString();
   }
 }
 
-folly::dynamic Camera::serialize() const {
-  folly::dynamic result = folly::dynamic::object
-    ("version", 1)
-    ("type", serializeType(type))
-    ("origin", serializeVector(position))
-    ("forward", serializeVector(forward()))
-    ("up", serializeVector(up()))
-    ("right", serializeVector(right()))
-    ("resolution", serializeVector(resolution))
-    ("principal", serializeVector(principal))
-    ("focal", serializeVector(focal))
-    ("id", id);
-  if (!distortion.isZero()) {
-    result["distortion"] = serializeVector(distortion);
-  }
-  if (!isDefaultFov()) {
-    result["fov"] = getFov();
-  }
-  if (!group.empty()) {
-    result["group"] = group;
-  }
+json::Value Camera::serialize() const
+{
+    json::Object result;
 
-  return result;
+    result["version"]=1;
+    result["type"]=serializeType(type);
+    result["origin"]=serializeVector(position);
+    result["forward"]=serializeVector(forward());
+    result["up"]=serializeVector(up());
+    result["right"]=serializeVector(right());
+    result["resolution"]=serializeVector(resolution);
+    result["principal"]=serializeVector(principal);
+    result["focal"]=serializeVector(focal);
+    result["id"]=id;
+  
+    if (!distortion.isZero())
+        result["distortion"] = serializeVector(distortion);
+    if (!isDefaultFov()) 
+        result["fov"] = getFov();
+    if (!group.empty())
+        result["group"] = group;
+
+    return result;
 }
 
 void Camera::setRotation(const Vector3& angleAxis) {
@@ -219,14 +219,20 @@ Camera::Vector3 midpoint(
   return (pa + pb) / 2;
 }
 
-std::vector<Camera> Camera::loadRig(const std::string& filename) {
+std::vector<Camera> Camera::loadRig(const std::string& filename)
+{
   std::string json;
-  folly::readFile(filename.c_str(), json);
+  std::ifstream fileStream(filename);
+  std::stringstream stream;
+
+  stream<<fileStream.rdbuf();
+  json=stream.str();
+  fileStream.close();
   CHECK(!json.empty()) << "could not read JSON file: " << filename;
-  folly::dynamic dynamic = folly::parseJson(json);
+  json::Value dynamic=json::Deserialize(json);
 
   std::vector<Camera> cameras;
-  for (const auto& camera : dynamic["cameras"]) {
+  for (const auto& camera : dynamic["cameras"].ToArray()) {
     cameras.emplace_back(camera);
   }
   return cameras;
@@ -235,12 +241,20 @@ std::vector<Camera> Camera::loadRig(const std::string& filename) {
 void Camera::saveRig(
     const std::string& filename,
     const std::vector<Camera>& cameras) {
-  folly::dynamic dynamic = folly::dynamic::object(
-    "cameras", folly::dynamic::array());
+    json::Array cameraArray;
+
   for (const auto& camera : cameras) {
-    dynamic["cameras"].push_back(camera.serialize());
+      cameraArray.push_back(camera.serialize());
   }
-  folly::writeFile(folly::toPrettyJson(dynamic), filename.c_str());
+  json::Object dynamic;
+
+  dynamic["camera"]=cameraArray;
+  std::string output=json::Serialize(dynamic);
+
+  std::ofstream out(filename);
+  
+  out<<output;
+  out.close();
 }
 
 // takes a camera and a scale factor. returns a camera model equivalent to
@@ -263,29 +277,54 @@ Camera Camera::createRescaledCamera(
   return scaledCam;
 }
 
-void Camera::unitTest() {
-  folly::dynamic serialized = folly::dynamic::object
-      ("version", 1)
-      ("type", "FTHETA")
-      ("origin", folly::dynamic::array(
-        -10.51814,
-        13.00734,
-        -4.22656))
-      ("forward", folly::dynamic::array(
-        -0.6096207796429852,
-        0.7538922995778138,
-        -0.24496715221587234))
-      ("up", folly::dynamic::array(
-        0.7686134846014325,
-        0.6376793279268061,
-        0.050974366338976666))
-      ("right", folly::dynamic::array(
-        0.19502945167097138,
-        -0.15702371237098722,
-        -0.9681462011153862))
-      ("resolution", folly::dynamic::array(2448, 2048))
-      ("focal", folly::dynamic::array(1240, -1240))
-      ("id", "cam9");
+void Camera::unitTest()
+{
+    json::Object serialized;
+
+      serialized["version"]=1;
+      serialized["type"]="FTHETA";
+
+      json::Array originArray;
+
+      originArray.push_back(-10.51814);
+      originArray.push_back(13.00734);
+      originArray.push_back(-4.22656);
+
+      serialized["origin"]=originArray;
+
+      json::Array forwardArray;
+
+      forwardArray.push_back(-0.6096207796429852);
+      forwardArray.push_back(0.7538922995778138);
+      forwardArray.push_back(-0.24496715221587234);
+      serialized["forward"]=forwardArray;
+
+      json::Array upArray;
+
+      upArray.push_back(0.7686134846014325);
+      upArray.push_back(0.6376793279268061);
+      upArray.push_back(0.050974366338976666);
+      serialized["up"]=upArray;
+
+      json::Array rightArray;
+
+      rightArray.push_back(0.19502945167097138);
+      rightArray.push_back(-0.15702371237098722);
+      rightArray.push_back(-0.9681462011153862);
+      serialized["right"]=rightArray;
+      
+      json::Array resArray;
+
+      resArray.push_back(2448);
+      resArray.push_back(2048);
+      serialized["resolution"]=resArray;
+
+      json::Array focalArray;
+
+      focalArray.push_back(1240);
+      focalArray.push_back(-1240);
+      serialized["focal"]=focalArray;
+      serialized["id"]="cam9";
 
   Camera camera(serialized);
   CHECK_EQ(camera.id, "cam9");

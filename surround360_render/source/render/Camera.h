@@ -12,9 +12,17 @@
 #include <algorithm>
 
 #include <Eigen/Geometry>
-#include <folly/dynamic.h>
-#include <folly/FileUtil.h>
-#include <folly/json.h>
+//#include <folly/dynamic.h>
+//#include <folly/FileUtil.h>
+//#include <folly/json.h>
+#include <json.h>
+#include <glog/logging.h>
+
+#ifdef _WINDOWS
+#define _USE_MATH_DEFINES
+#endif
+
+#include <math.h>
 
 namespace surround360 {
 
@@ -45,8 +53,11 @@ struct Camera {
 
   // construction and de/serialization
   Camera(const Type type, const Vector2& resolution, const Vector2& focal);
-  Camera(const folly::dynamic& json);
-  folly::dynamic serialize() const;
+//  Camera(const folly::dynamic& json);
+//  folly::dynamic serialize() const;
+  Camera(const json::Value &json);
+  json::Value serialize() const;
+
   static Rig loadRig(const std::string& filename);
   static void saveRig(const std::string& filename, const Rig& rig);
   static Camera createRescaledCamera(const Camera& cam, const float scale);
@@ -236,18 +247,23 @@ struct Camera {
     return sensorToCamera(sensor);
   }
 
-  template <typename V>
-  static folly::dynamic serializeVector(const V& v) {
-    return folly::dynamic(v.data(), v.data() + v.size());
+  template<typename V>
+  static json::Value serializeVector(const V& v)
+  {
+      json::Array values;
+
+      for(size_t i=0; i<v.size(); ++i)
+          values.push_back(v[i]);
+      return values;
   }
 
   template <int kSize>
-  static Eigen::Matrix<Real, kSize, 1> deserializeVector(
-      const folly::dynamic& json) {
-    CHECK_EQ(kSize, json.size()) << "bad vector" << json;
+  static Eigen::Matrix<Real, kSize, 1> deserializeVector(const json::Array &json)
+  {
+    CHECK_EQ(kSize, json.size()) << "bad vector";
     Eigen::Matrix<Real, kSize, 1> result;
     for (int i = 0; i < kSize; ++i) {
-      result[i] = json[i].asDouble();
+      result[i] = json[i].ToDouble();
     }
     return result;
   }
@@ -261,9 +277,12 @@ struct Camera {
     }
   }
 
-  static Type deserializeType(const folly::dynamic& json) {
-    for (int i = 0; ; ++i) {
-      if (serializeType(Type(i)) == json.getString()) {
+  static Type deserializeType(const json::Value &json)
+  {
+    for (int i = 0; ; ++i)
+    {
+      if (serializeType(Type(i)) == json.ToString())
+      {
         return Type(i);
       }
     }

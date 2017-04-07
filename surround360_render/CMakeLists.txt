@@ -1,9 +1,36 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.2)
 
-PROJECT(Surround360Render CXX)
+option(USE_HUNTER "Enable Hunter CMake package handler, auto downloads and compiles require packages" ON)
 
-FIND_PACKAGE(OpenCV)
-FIND_PACKAGE(Ceres REQUIRED)
+if(USE_HUNTER)
+  include(${CMAKE_CURRENT_LIST_DIR}/cmake/Hunter/HunterGate.cmake)
+
+  HunterGate(
+      URL "https://github.com/ruslo/hunter/archive/v0.18.30.tar.gz"
+      SHA1 "6fc9258f984aed303eb960a95e36e19f2e7e83be"
+      LOCAL
+  )
+endif()
+
+PROJECT(Surround360Render)
+
+if(USE_HUNTER)
+  hunter_add_package(Boost COMPONENTS system filesystem)
+  hunter_add_package(gflags)
+  hunter_add_package(glog)
+  hunter_add_package(Eigen)
+  hunter_add_package(OpenCV)
+  hunter_add_package(ceres-solver)
+
+  add_definitions("-DBOOST_ALL_NO_LIB") #remove auto linking from boost
+endif()
+
+find_package(Boost CONFIG REQUIRED system filesystem)
+find_package(gflags CONFIG REQUIRED)
+find_package(glog CONFIG REQUIRED)
+find_package(Eigen3 CONFIG REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(Ceres CONFIG REQUIRED)
 
 INCLUDE_DIRECTORIES(${OpenCV_INCLUDE_DIRS})
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source)
@@ -12,8 +39,13 @@ INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/optical_flow)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/camera_isp)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/calibration)
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/render)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/source/thirdparty/supereasyjson)
 INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR})
-INCLUDE_DIRECTORIES(/usr/local/include/eigen3)
+#INCLUDE_DIRECTORIES(/usr/local/include/eigen3)
+
+if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+  add_definitions("-DLINUX")
+endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   # required for clang, including AppleClang
@@ -98,7 +130,16 @@ ADD_LIBRARY(
   ${render_SRC}
   ${util_SRC}
 )
+
 TARGET_COMPILE_FEATURES(LibVrCamera PRIVATE cxx_range_for)
+target_link_libraries(
+    LibVrCamera 
+        Eigen3::Eigen
+        Boost::system
+        Boost::filesystem
+        glog::glog
+        LibJSON
+)
 
 ### Raw2Rgb ###
 
@@ -125,45 +166,47 @@ IF (DEFINED HALIDE_DIR)
   IF(NOT APPLE AND NOT MSVC)
     TARGET_LINK_LIBRARIES(
        Raw2Rgb
-       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-       LibVrCamera
-       LibJSON
-       glog
-       gflags
-       ${OpenCV_LIBS}
-       Halide
-       dl
-       tinfo
-       z)
+           "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+           "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+           "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+           "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+           LibVrCamera
+           LibJSON
+           glog::glog
+           gflags-static
+           ${OpenCV_LIBS}
+           Halide
+#           dl
+           tinfo
+#           z
+       )
   ELSE()
       TARGET_LINK_LIBRARIES(
        Raw2Rgb
-       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
-       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
-       LibVrCamera
-       LibJSON
-       glog
-       gflags
-       ${OpenCV_LIBS}
-       Halide
-       dl)
+           "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+           "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
+           "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+           "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
+           LibVrCamera
+           LibJSON
+           glog::glog
+           gflags-static
+           ${OpenCV_LIBS}
+           Halide
+#           dl
+       )
   ENDIF()
 ELSE()
   ADD_EXECUTABLE(Raw2Rgb source/camera_isp/Raw2Rgb.cpp)
   TARGET_LINK_LIBRARIES(
      Raw2Rgb
-     LibVrCamera
-     LibJSON
-     glog
-     gflags
-     dl
-     z
-     ${OpenCV_LIBS}
+        LibVrCamera
+        LibJSON
+        glog::glog
+        gflags-static
+#        dl
+#        z
+        ${OpenCV_LIBS}
   )
 ENDIF()
 
@@ -178,9 +221,8 @@ TARGET_LINK_LIBRARIES(
   TestRenderStereoPanorama
   LibVrCamera
   LibJSON
-  folly
-  glog
-  gflags
+  glog::glog
+  gflags-static
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
 )
@@ -196,8 +238,9 @@ TARGET_LINK_LIBRARIES(
   TestJson
   LibVrCamera
   LibJSON
-  glog
-  gflags
+  glog::glog
+  gflags-static
+  Boost::system
 )
 
 ### TestOpticalFlow ###
@@ -211,8 +254,10 @@ TARGET_LINK_LIBRARIES(
   TestOpticalFlow
   LibVrCamera
   LibJSON
-  glog
-  gflags
+  glog::glog
+  gflags-static
+  Boost::system
+  Boost::filesystem
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
 )
@@ -227,8 +272,8 @@ TARGET_COMPILE_FEATURES(TestLogger PRIVATE cxx_range_for)
 TARGET_LINK_LIBRARIES(
   TestLogger
   LibVrCamera
-  glog
-  gflags
+  glog::glog
+  gflags-static
   ${OpenCV_LIBS}
 )
 
@@ -249,8 +294,8 @@ IF (DEFINED HALIDE_DIR)
       Unpacker
       LibVrCamera
       LibJSON
-      glog
-      gflags
+      glog::glog
+      gflags-static
       ${OpenCV_LIBS}
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
@@ -268,8 +313,8 @@ IF (DEFINED HALIDE_DIR)
       Unpacker
       LibVrCamera
       LibJSON
-      glog
-      gflags
+      glog::glog
+      gflags-static
       ${OpenCV_LIBS}
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGenFast8${CMAKE_STATIC_LIBRARY_SUFFIX}"
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen8${CMAKE_STATIC_LIBRARY_SUFFIX}"
@@ -296,9 +341,8 @@ TARGET_LINK_LIBRARIES(
   TestHyperPreview
   LibVrCamera
   LibJSON
-  folly
-  glog
-  gflags
+  glog::glog
+  gflags-static
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
 )
@@ -314,9 +358,8 @@ TARGET_LINK_LIBRARIES(
   TestPoleRemoval
   LibVrCamera
   LibJSON
-  folly
-  gflags
-  glog
+  gflags-static
+  glog::glog
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
 )
@@ -332,8 +375,8 @@ TARGET_LINK_LIBRARIES(
   TestExtractAlphaChannel
   LibVrCamera
   LibJSON
-  gflags
-  glog
+  gflags-static
+  glog::glog
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
 )
@@ -358,8 +401,8 @@ IF (DEFINED HALIDE_DIR)
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
       LibVrCamera
       LibJSON
-      gflags
-      glog
+      gflags-static
+      glog::glog
       ${OpenCV_LIBS}
       ${CERES_LIBRARIES}
       Halide
@@ -376,8 +419,8 @@ IF (DEFINED HALIDE_DIR)
     "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
     LibVrCamera
     LibJSON
-    gflags
-    glog
+    gflags-static
+    glog::glog
     ${OpenCV_LIBS}
     ${CERES_LIBRARIES}
     Halide
@@ -394,8 +437,8 @@ ELSE()
     TestColorCalibration
     LibVrCamera
     LibJSON
-    gflags
-    glog
+    gflags-static
+    glog::glog
     ${OpenCV_LIBS}
     ${CERES_LIBRARIES}
     ${PLATFORM_SPECIFIC_LIBS}
@@ -421,9 +464,8 @@ IF (DEFINED HALIDE_DIR)
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
       LibVrCamera
       LibJSON
-      gflags
-      glog
-      folly
+      gflags-static
+      glog::glog
       ${OpenCV_LIBS}
       ${CERES_LIBRARIES}
       Halide
@@ -440,9 +482,8 @@ IF (DEFINED HALIDE_DIR)
       "${CMAKE_CURRENT_BINARY_DIR}/CameraIspGen16${CMAKE_STATIC_LIBRARY_SUFFIX}"
       LibVrCamera
       LibJSON
-      gflags
-      glog
-      folly
+      gflags-static
+      glog::glog
       ${OpenCV_LIBS}
       ${CERES_LIBRARIES}
       Halide
@@ -459,9 +500,8 @@ ELSE()
     TestVignettingCalibration
     LibVrCamera
     LibJSON
-    gflags
-    glog
-    folly
+    gflags-static
+    glog::glog
     ${OpenCV_LIBS}
     ${CERES_LIBRARIES}
     ${PLATFORM_SPECIFIC_LIBS}
@@ -478,9 +518,8 @@ TARGET_LINK_LIBRARIES(
   TestVignettingDataAcquisition
   LibVrCamera
   LibJSON
-  gflags
-  glog
-  folly
+  gflags-static
+  glog::glog
   ${OpenCV_LIBS}
   ${CERES_LIBRARIES}
   ${PLATFORM_SPECIFIC_LIBS}
@@ -496,12 +535,12 @@ TARGET_LINK_LIBRARIES(
   GeometricCalibration
   LibVrCamera
   LibJSON
-  gflags
-  glog
-  folly
-  boost_filesystem
-  boost_system
-  double-conversion
+  gflags-static
+  glog::glog
+  Eigen3::Eigen
+  Boost::system
+  Boost::filesystem
+#  double-conversion
   ${OpenCV_LIBS}
   ${PLATFORM_SPECIFIC_LIBS}
   ${CERES_LIBRARIES}
