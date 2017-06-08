@@ -20,7 +20,11 @@ RigDescription::RigDescription(const string& filename) {
   for (const Camera& camera : rig) {
     if (camera.group.find("side") != string::npos) {
       rigSideOnly.emplace_back(camera);
-    }
+    } else if (camera.group.find("top") != string::npos) {
+	  rigTopOnly.emplace_back(camera);
+	  } else if (camera.group.find("bottom") != string::npos) {
+	    rigBottomOnly.emplace_back(camera);
+	  }
   }
 
   // validation
@@ -74,7 +78,10 @@ string RigDescription::getSideCameraId(const int idx) const {
 }
 
 float RigDescription::getRingRadius() const {
-  return rigSideOnly[0].position.norm();
+	float sqnormsum = 0;
+	for (auto& sidecam : rigSideOnly)
+		sqnormsum += sidecam.position.squaredNorm();
+	return sqrt(sqnormsum / rigSideOnly.size());
 }
 
 vector<Mat> RigDescription::loadSideCameraImages(

@@ -26,7 +26,7 @@ using namespace surround360::util;
 
 struct RigDescription {
   Camera::Rig rig;
-  Camera::Rig rigSideOnly;
+  Camera::Rig rigSideOnly, rigTopOnly, rigBottomOnly;
   RigDescription(const string& filename);
 
   // find the camera that is closest to pointing in the provided direction
