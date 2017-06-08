@@ -33,7 +33,8 @@ struct RigDescription {
   // ignore those with excessive distance from the camera axis to the rig center
   const Camera& findCameraByDirection(
     const Camera::Vector3& direction,
-    const Camera::Real distCamAxisToRigCenterMax = 1.0) const;
+    const Camera::Real distCamAxisToRigCenterMax = 50.0) const;
+    // !!! Blaise: modify from 1.0
 
   // find the camera with the largest distance from camera axis to rig center
   const Camera& findLargestDistCamAxisToRigCenter() const;

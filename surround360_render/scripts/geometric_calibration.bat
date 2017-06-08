@@ -1,0 +1,1 @@
+"C:\Program Files\Python27\python.exe" geometric_calibration.py %*

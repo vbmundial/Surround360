@@ -1,0 +1,1 @@
+"C:\Program Files\Python27\python.exe" run_all.py %*
