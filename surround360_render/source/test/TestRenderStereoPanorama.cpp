@@ -564,75 +564,63 @@ void poleToSideFlowThread(
 // does pole removal from the two bottom cameras, and projects the result to equirect
 void prepareBottomImagesThread(
     const RigDescription& rig,
-    Mat* bottomSpherical) {
+    vector<Mat>& bottomSphericals) {
 
-  Mat bottomImage;
-  if (FLAGS_enable_pole_removal) {
-    LOG(INFO) << "Using pole removal masks";
-    requireArg(FLAGS_bottom_pole_masks_dir, "bottom_pole_masks_dir");
+  bottomSphericals.resize(rig.rigBottomOnly.size());
+  for (int i = 0; i < rig.rigBottomOnly.size(); ++i) {
+    Mat& bottomSpherical = bottomSphericals[i];
 
-    const Camera& cam = rig.rigBottomOnly[0];
-    const Camera& cam2 = rig.rigBottomOnly[1];
-    float bottomCamUsablePixelsRadius = Camera::approximateUsablePixelsRadius(cam);
-    float bottomCam2UsablePixelsRadius = Camera::approximateUsablePixelsRadius(cam2);
-    bool flip180 = cam.up().dot(cam2.up()) < 0 ? true : false;
-	static const bool kSaveDataNextFrame = false /* true*/;
-    combineBottomImagesWithPoleRemoval(
-      FLAGS_imgs_dir,
-      FLAGS_frame_number,
-      FLAGS_bottom_pole_masks_dir,
-      FLAGS_prev_frame_data_dir,
-      FLAGS_output_data_dir,
-      FLAGS_save_debug_images,
-      kSaveDataNextFrame,
-      FLAGS_poleremoval_flow_alg,
-      FLAGS_std_alpha_feather_size,
-      rig.getBottomCameraId(),
-      rig.getBottomCamera2Id(),
-      bottomCamUsablePixelsRadius,
-      bottomCam2UsablePixelsRadius,
-      flip180,
-      bottomImage);
-  } else {
-    LOG(INFO) << "Using primary bottom camera";
-    const string cameraDir = FLAGS_imgs_dir + "/" + rig.getBottomCameraId();
-    const string bottomImagePath =
-      cameraDir + "/" + FLAGS_frame_number + ".png";
-    bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_COLOR);
-  }
-
-  const Camera& camera = rig.findCameraByDirection(-kGlobalUp);
-  bottomSpherical->create(
-    FLAGS_eqr_height * camera.getFov() / M_PI,
-    FLAGS_eqr_width,
-    CV_8UC4);
-  bicubicRemapToSpherical(
-    *bottomSpherical,
-    bottomImage,
-    camera,
-    0,
-    2.0f * M_PI,
-    -(M_PI / 2.0f),
-    -(M_PI / 2.0f - camera.getFov()));
-
-  // the alpha channel in bottomSpherical is the result of pole removal/flow. this can in
-  // some cases cause an alpha-channel discontinuity at the boundary of the image, which
-  // will have an effect on flow between bottom and sides. to mitigate that, we do another
-  // pass of feathering on bottomSpherical before converting to polar coordinates.
-  const int yFeatherStart = bottomSpherical->rows - 1 - FLAGS_std_alpha_feather_size;
-  for (int y = yFeatherStart; y < bottomSpherical->rows; ++y) {
-    for (int x = 0; x < bottomSpherical->cols; ++x) {
-      const float alpha =
-        1.0f - float(y - yFeatherStart) / float(FLAGS_std_alpha_feather_size);
-      bottomSpherical->at<Vec4b>(y, x)[3] =
-        min(bottomSpherical->at<Vec4b>(y, x)[3], (unsigned char)(255.0f * alpha));
+    const string cameraDir = FLAGS_imgs_dir + "/" + rig.rigBottomOnly[i].id;
+    const string bottomImagePath = cameraDir + "/" + FLAGS_frame_number + ".png";
+    Mat bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_UNCHANGED);
+    if (FLAGS_enable_pole_removal) {
+      if (bottomImage.channels() != 4) {
+        cvtColor(bottomImage, bottomImage, CV_BGR2BGRA);
+        const string poleMaskPath = FLAGS_bottom_pole_masks_dir + "/" 
+                                  + rig.rigBottomOnly[i].id + ".png";
+        Mat bottomRedMask = imreadExceptionOnFail(poleMaskPath, CV_LOAD_IMAGE_COLOR);
+        cutRedMaskOutOfAlphaChannel(bottomImage, bottomRedMask);
+      }
+      // Somehow (0,0,0,0) is treated as trasparent, while sometimes (255,255,255,0) is not.
+      // PNG with transparency is loaded with (255,255,255,0) pixels
+      Mat mask;
+      inRange(bottomImage, Vec4b(255, 255, 255, 0), Vec4b(255, 255, 255, 0), mask);
+      bottomImage.setTo(Vec4b(0, 0, 0, 0), mask);
     }
-  }
 
-  if (FLAGS_save_debug_images) {
-    const string debugDir =
-      FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
-    imwriteExceptionOnFail(debugDir + "/_bottomSpherical.png", *bottomSpherical);
+    const Camera& camera = rig.rigBottomOnly[i];
+    bottomSpherical.create(
+      FLAGS_eqr_height * camera.getFov() / M_PI,
+      FLAGS_eqr_width,
+      CV_8UC4);
+    bicubicRemapToSpherical(
+      bottomSpherical,
+      bottomImage,
+      camera,
+      0,
+      2.0f * M_PI,
+      -(M_PI / 2.0f),
+      -(M_PI / 2.0f - camera.getFov()));
+
+    // the alpha channel in bottomSpherical is the result of pole removal/flow. this can in
+    // some cases cause an alpha-channel discontinuity at the boundary of the image, which
+    // will have an effect on flow between bottom and sides. to mitigate that, we do another
+    // pass of feathering on bottomSpherical before converting to polar coordinates.
+    const int yFeatherStart = bottomSpherical.rows - 1 - FLAGS_std_alpha_feather_size;
+    for (int y = yFeatherStart; y < bottomSpherical.rows; ++y) {
+      for (int x = 0; x < bottomSpherical.cols; ++x) {
+        const float alpha =
+          1.0f - float(y - yFeatherStart) / float(FLAGS_std_alpha_feather_size);
+        bottomSpherical.at<Vec4b>(y, x)[3] =
+          min(bottomSpherical.at<Vec4b>(y, x)[3], (unsigned char)(255.0f * alpha));
+      }
+    }
+
+    if (FLAGS_save_debug_images) {
+      const string debugDir =
+        FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
+      imwriteExceptionOnFail(debugDir + camera.id + "/_bottomSpherical.png", bottomSpherical);
+    }
   }
 }
 
@@ -734,14 +722,12 @@ void renderStereoPanorama() {
 
   // prepare the bottom camera(s) by doing pole removal and projections in a thread.
   // will join that thread as late as possible.
-  Mat bottomSpherical;
-  std::thread prepareBottomThread;
+  vector<Mat> bottomSphericals;
+  thread prepareBottomThread;
   if (FLAGS_enable_bottom) {
     VLOG(1) << "Bottom cameras enabled. Preparing bottom projections in a thread";
     prepareBottomThread = std::thread(
-      prepareBottomImagesThread,
-      std::cref(rig),
-      &bottomSpherical);
+      prepareBottomImagesThread, std::cref(rig), std::ref(bottomSphericals));
   }
 
   // top cameras are handled similar to bottom cameras- do anything we can in a thread
@@ -803,7 +789,7 @@ void renderStereoPanorama() {
 
   // if both top and bottom cameras are enabled, there are 4 threads that can be done in
   // parallel (for top/bottom, we flow to the left eye and right eye side panoramas).
-  std::thread topFlowThreadL, topFlowThreadR, bottomFlowThreadL, bottomFlowThreadR;
+  std::thread topFlowThreadL, topFlowThreadR;
   const double topBottomToSideStartTime = getCurrTimeSec();
 
   // if we have a top camera, do optical flow with its image and the side camera
@@ -828,32 +814,6 @@ void renderStereoPanorama() {
       &topSphericalWarpedR);
   }
 
-  Mat flipSphericalImageL, flipSphericalImageR;
-  Mat bottomSphericalWarpedL, bottomSphericalWarpedR;
-  if (FLAGS_enable_bottom) {
-    prepareBottomThread.join(); // this is the latest we can wait
-
-    // flip the side images upside down for bottom flow
-    flip(sphericalImageL, flipSphericalImageL, -1);
-    flip(sphericalImageR, flipSphericalImageR, -1);
-
-    bottomFlowThreadL = std::thread(
-      poleToSideFlowThread,
-      "bottom_left",
-      cref(rig),
-      &flipSphericalImageL,
-      &bottomSpherical,
-      &bottomSphericalWarpedL);
-
-    bottomFlowThreadR = std::thread(
-      poleToSideFlowThread,
-      "bottom_right",
-      cref(rig),
-      &flipSphericalImageR,
-      &bottomSpherical,
-      &bottomSphericalWarpedR);
-  }
-
   // now that all 4 possible threads have been spawned, we are ready to wait for the
   // threads to finish, then composite the results
   if (FLAGS_enable_top) {
@@ -866,17 +826,39 @@ void renderStereoPanorama() {
   }
 
   if (FLAGS_enable_bottom) {
-    bottomFlowThreadL.join();
-    bottomFlowThreadR.join();
+    prepareBottomThread.join(); // this is the latest we can wait
+    for (int i = 0; i < rig.rigBottomOnly.size(); ++i) {
+      Mat bottomSphericalWarpedL, bottomSphericalWarpedR;
+      // flip the side images upside down for bottom flow
+      Mat flipSphericalImageL, flipSphericalImageR;
 
-    flip(sphericalImageL, sphericalImageL, -1);
-    flip(sphericalImageR, sphericalImageR, -1);
-    sphericalImageL =
-      flattenLayersDeghostPreferBase(sphericalImageL, bottomSphericalWarpedL);
-    sphericalImageR =
-      flattenLayersDeghostPreferBase(sphericalImageR, bottomSphericalWarpedR);
-    flip(sphericalImageL, sphericalImageL, -1);
-    flip(sphericalImageR, sphericalImageR, -1);
+      flip(sphericalImageL, flipSphericalImageL, -1);
+      thread bottomFlowThreadL(
+        poleToSideFlowThread, "bottom_left",
+        cref(rig),
+        &flipSphericalImageL,
+        &bottomSphericals[i],
+        &bottomSphericalWarpedL);
+
+      flip(sphericalImageR, flipSphericalImageR, -1);
+      thread bottomFlowThreadR(
+        poleToSideFlowThread,
+        "bottom_right",
+        cref(rig),
+        &flipSphericalImageR,
+        &bottomSphericals[i],
+        &bottomSphericalWarpedR);
+
+      bottomFlowThreadL.join();
+      flipSphericalImageL =
+        flattenLayersDeghostPreferBase(flipSphericalImageL, bottomSphericalWarpedL);
+      
+      bottomFlowThreadR.join();
+      flipSphericalImageR =
+        flattenLayersDeghostPreferBase(flipSphericalImageR, bottomSphericalWarpedR);
+      flip(flipSphericalImageL, sphericalImageL, -1);
+      flip(flipSphericalImageR, sphericalImageR, -1);
+    } 
   }
   const double topBottomToSideEndTime = getCurrTimeSec();
 
