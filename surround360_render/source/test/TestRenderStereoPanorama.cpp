@@ -410,10 +410,12 @@ void poleToSideFlowThread(
     }
   }
 
-  const string flowImagesDir =
-    FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/flow_images/";
-  imwriteExceptionOnFail(flowImagesDir + "/extendedSideSpherical_" + eyeName + ".png", extendedSideSpherical);
-  imwriteExceptionOnFail(flowImagesDir + "/extendedFisheyeSpherical_" + eyeName + ".png", extendedFisheyeSpherical);
+  if (FLAGS_save_debug_images) {
+    const string flowImagesDir =
+      FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/flow_images/";
+    imwriteExceptionOnFail(flowImagesDir + "/extendedSideSpherical_" + eyeName + ".png", extendedSideSpherical);
+    imwriteExceptionOnFail(flowImagesDir + "/extendedFisheyeSpherical_" + eyeName + ".png", extendedFisheyeSpherical);
+  }
 
   Mat prevFisheyeFlow;
   Mat prevExtendedSideSpherical;
@@ -834,7 +836,8 @@ void renderStereoPanorama() {
 
       flip(sphericalImageL, flipSphericalImageL, -1);
       thread bottomFlowThreadL(
-        poleToSideFlowThread, "bottom_left",
+        poleToSideFlowThread, 
+        "bottom_left" + rig.rigBottomOnly[i].id,
         cref(rig),
         &flipSphericalImageL,
         &bottomSphericals[i],
@@ -843,7 +846,7 @@ void renderStereoPanorama() {
       flip(sphericalImageR, flipSphericalImageR, -1);
       thread bottomFlowThreadR(
         poleToSideFlowThread,
-        "bottom_right",
+        "bottom_right" + rig.rigBottomOnly[i].id,
         cref(rig),
         &flipSphericalImageR,
         &bottomSphericals[i],
