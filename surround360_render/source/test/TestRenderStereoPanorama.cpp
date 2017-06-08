@@ -571,14 +571,11 @@ void prepareBottomImagesThread(
     LOG(INFO) << "Using pole removal masks";
     requireArg(FLAGS_bottom_pole_masks_dir, "bottom_pole_masks_dir");
 
-    float bottomCamUsablePixelsRadius;
-    float bottomCam2UsablePixelsRadius;
-    bool flip180;
-    const Camera& cam = rig.findCameraByDirection(-kGlobalUp);
-    const Camera& cam2 = rig.findLargestDistCamAxisToRigCenter();
-    bottomCamUsablePixelsRadius = Camera::approximateUsablePixelsRadius(cam);
-    bottomCam2UsablePixelsRadius = Camera::approximateUsablePixelsRadius(cam2);
-    flip180 = cam.up().dot(cam2.up()) < 0 ? true : false;
+    const Camera& cam = rig.rigBottomOnly[0];
+    const Camera& cam2 = rig.rigBottomOnly[1];
+    float bottomCamUsablePixelsRadius = Camera::approximateUsablePixelsRadius(cam);
+    float bottomCam2UsablePixelsRadius = Camera::approximateUsablePixelsRadius(cam2);
+    bool flip180 = cam.up().dot(cam2.up()) < 0 ? true : false;
 	static const bool kSaveDataNextFrame = false /* true*/;
     combineBottomImagesWithPoleRemoval(
       FLAGS_imgs_dir,
@@ -608,7 +605,7 @@ void prepareBottomImagesThread(
   bottomSpherical->create(
     FLAGS_eqr_height * camera.getFov() / M_PI,
     FLAGS_eqr_width,
-    CV_8UC3);
+    CV_8UC4);
   bicubicRemapToSpherical(
     *bottomSpherical,
     bottomImage,
@@ -617,11 +614,6 @@ void prepareBottomImagesThread(
     2.0f * M_PI,
     -(M_PI / 2.0f),
     -(M_PI / 2.0f - camera.getFov()));
-
-  // if we skipped pole removal, there is no alpha channel and we need to add one.
-  if (bottomSpherical->type() != CV_8UC4) {
-    cvtColor(*bottomSpherical, *bottomSpherical, CV_BGR2BGRA);
-  }
 
   // the alpha channel in bottomSpherical is the result of pole removal/flow. this can in
   // some cases cause an alpha-channel discontinuity at the boundary of the image, which
