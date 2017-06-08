@@ -452,21 +452,22 @@ void poleToSideFlowThread(
   saveFlowToFile(flow, flowDir + "/flow_" + eyeName + ".bin");*/
 
   // make a ramp for alpha/flow magnitude
-  const float kRampFrac = 1.0f; // fraction of available overlap used for ramp
-  float poleCameraCropRadius;
-  float poleCameraRadius;
-  float sideCameraRadius;
+  //const float kRampFrac = 1.0f; // fraction of available overlap used for ramp
+  const float kRampFrac = 1.0f; // test: fraction of available overlap used for ramp
 
   // use fov from bottom camera
-  poleCameraRadius = rig.findCameraByDirection(-kGlobalUp).getFov();
+  float poleCameraRadius = rig.findCameraByDirection(-kGlobalUp).getFov();
 
   // use fov from first side camera
-  sideCameraRadius = approximateFov(rig.rigSideOnly, true);
+  float sideCameraRadius = approximateFov(rig.rigSideOnly, true);
 
   // crop is average of side and pole cameras
-  poleCameraCropRadius =
-    0.5f * (M_PI / 2 - sideCameraRadius) +
-    0.5f * (std::min(float(M_PI / 2), poleCameraRadius));
+  /*float poleCameraCropRadius = 0.5f * (M_PI / 2 - sideCameraRadius) +
+      0.5f * (std::min(float(M_PI / 2), poleCameraRadius))*/;
+  // test: weighted average
+  float weigthSide = 0.5f;
+  float poleCameraCropRadius = weigthSide * (M_PI / 2 - sideCameraRadius) +
+    (1.0f - weigthSide) * (std::min(float(M_PI / 2), poleCameraRadius));
 
   // convert from radians to degrees
   poleCameraCropRadius *= 180 / M_PI;
@@ -656,7 +657,7 @@ void prepareTopImagesThread(
   topSpherical->create(
     FLAGS_eqr_height * camera.getFov() / M_PI,
     FLAGS_eqr_width,
-    CV_8UC3);
+    CV_8UC4);
   bicubicRemapToSpherical(
     *topSpherical,
     topImage,
@@ -667,7 +668,9 @@ void prepareTopImagesThread(
     M_PI / 2.0f - camera.getFov());
 
   // alpha feather the top spherical image for flow purposes
-  cvtColor(*topSpherical, *topSpherical, CV_BGR2BGRA);
+  if (topSpherical->type() != CV_8UC4) {
+    cvtColor(*topSpherical, *topSpherical, CV_BGR2BGRA);
+  }
   const int yFeatherStart = topSpherical->rows - 1 - FLAGS_std_alpha_feather_size;
   for (int y = yFeatherStart ; y < topSpherical->rows ; ++y) {
     for (int x = 0; x < topSpherical->cols; ++x) {
