@@ -47,7 +47,7 @@ RENDER_COMMAND_TEMPLATE = """
 --eqr_height {EQR_HEIGHT}
 --final_eqr_width {FINAL_EQR_WIDTH}
 --final_eqr_height {FINAL_EQR_HEIGHT}
---interpupilary_dist 6.4
+--interpupilary_dist {IPD}
 --zero_parallax_dist 10000
 --sharpenning {SHARPENNING}
 {EXTRA_FLAGS}
@@ -93,6 +93,8 @@ if __name__ == "__main__":
     parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
     parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_search_20', required=True)
     parser.add_argument('--verbose', dest='verbose', action='store_true')
+    parser.add_argument('--interpupilary_dist', required=True)
+    parser.add_argument('--sideimgcount', required=True)
     parser.set_defaults(save_debug_images=False)
     parser.set_defaults(enable_top=False)
     parser.set_defaults(enable_bottom=False)
@@ -120,6 +122,8 @@ if __name__ == "__main__":
     rig_json_file = args["rig_json_file"]
     flow_alg = args["flow_alg"]
     verbose = args["verbose"]
+    interpupilary_dist = float(args["interpupilary_dist"])
+    sideimgcount = int(args["sideimgcount"])
 
     start_time = timer()
 
@@ -162,6 +166,7 @@ if __name__ == "__main__":
             "POLAR_FLOW_ALGORITHM": flow_alg,
             "POLEREMOVAL_FLOW_ALGORITHM": flow_alg,
             "EXTRA_FLAGS": "",
+            "IPD": interpupilary_dist
         }
 
         if resume or not is_first_frame:
@@ -185,25 +190,25 @@ if __name__ == "__main__":
 
         if quality == "3k":
             render_params["SHARPENNING"] = 0.25
-            render_params["EQR_WIDTH"] = 3080
+            render_params["EQR_WIDTH"] = (int(3080 / sideimgcount) + 1) * sideimgcount
             render_params["EQR_HEIGHT"] = 1540
             render_params["FINAL_EQR_WIDTH"] = 3080
             render_params["FINAL_EQR_HEIGHT"] = 3080
         elif quality == "4k":
             render_params["SHARPENNING"] = 0.25
-            render_params["EQR_WIDTH"] = 4128
+            render_params["EQR_WIDTH"] = ceil(4096 / sideimgcount) * sideimgcount
             render_params["EQR_HEIGHT"] = 2048
             render_params["FINAL_EQR_WIDTH"] = 4096
             render_params["FINAL_EQR_HEIGHT"] = 4096
         elif quality == "6k":
             render_params["SHARPENNING"] = 0.25
-            render_params["EQR_WIDTH"] = 6300
+            render_params["EQR_WIDTH"] = ceil(6144 / sideimgcount) * sideimgcount
             render_params["EQR_HEIGHT"] = 3072
             render_params["FINAL_EQR_WIDTH"] = 6144
             render_params["FINAL_EQR_HEIGHT"] = 6144
         elif quality == "8k":
             render_params["SHARPENNING"] = 0.25
-            render_params["EQR_WIDTH"] = 8304
+            render_params["EQR_WIDTH"] = ceil(8192 / sideimgcount) * sideimgcount
             render_params["EQR_HEIGHT"] = 4096
             render_params["FINAL_EQR_WIDTH"] = 8192
             render_params["FINAL_EQR_HEIGHT"] = 8192

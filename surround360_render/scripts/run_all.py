@@ -81,6 +81,8 @@ RENDER_COMMAND_TEMPLATE = """
 --cubemap_height {CUBEMAP_HEIGHT}
 --cubemap_format {CUBEMAP_FORMAT}
 --rig_json_file {RIG_JSON_FILE}
+--interpupilary_dist {IPD} 
+--sideimgcount {SIDEIMGCOUNT} 
 {FLAGS_RENDER_EXTRA}
 """
 
@@ -112,11 +114,11 @@ def parse_args():
     parser.add_argument('--dest_dir', metavar='Destination Directory', help='destination directory', required=True,
                         **({"widget": "DirChooser"} if USE_GOOEY else {}))
     parser.add_argument('--start_frame', metavar='Start Frame', help='start frame', required=False, default='0')
-    parser.add_argument('--frame_count', metavar='Frame Count', help='0 = all', required=False, default='0')
+    parser.add_argument('--frame_count', metavar='Frame Count', help='0 = all', required=False, default='1')
     parser.add_argument('--quality', metavar='Quality', help='final output quality', required=False,
                         choices=['3k', '4k', '6k', '8k'], default='6k')
     parser.add_argument('--cubemap_format', metavar='Cubemap Format', help='photo or video', required=False,
-                        choices=['photo', 'video'], default='video')
+                        choices=['photo', 'video'], default='photo')
     parser.add_argument('--cubemap_width', metavar='Cubemap Face Width', help='0 = no cubemaps', required=False,
                         default='0')
     parser.add_argument('--cubemap_height', metavar='Cubemap Face Height', help='0 = no cubemaps', required=False,
@@ -125,13 +127,15 @@ def parse_args():
     parser.add_argument('--save_raw', help='Save RAW images', action='store_true')
     parser.add_argument('--steps_unpack', help='Step 1: convert data in .bin files to RGB files', action='store_true',
                         required=False)
-    parser.add_argument('--steps_render', help='Step 2: render stereo panoramas', action='store_true', required=False)
+    parser.add_argument('--steps_render', help='Step 2: render stereo panoramas', action='store_true', required=False, default=True)
     parser.add_argument('--steps_ffmpeg', help='Step 3: create video output', action='store_true', required=False)
     parser.add_argument('--enable_top', help='Enable top camera', action='store_true')
     parser.add_argument('--enable_bottom', help='Enable bottom camera', action='store_true')
     parser.add_argument('--enable_pole_removal', help='false = use primary bottom camera', action='store_true')
     parser.add_argument('--dryrun', help='Do not execute steps', action='store_true')
     parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
+    parser.add_argument('--interpupilary_dist', metavar='IPD', help='interpupilary_dist', default='6.4')
+    parser.add_argument('--sideimgcount', metavar='Side image count', help='sideimgcount', required=True, default='0')
 
     return vars(parser.parse_args())
 
@@ -201,7 +205,9 @@ if __name__ == "__main__":
     enable_pole_removal = args["enable_pole_removal"]
     save_debug_images = args["save_debug_images"]
     save_raw = args["save_raw"]
-    dryrun = args["dryrun"];
+    dryrun = args["dryrun"]
+    interpupilary_dist = float(args["interpupilary_dist"])
+    sideimgcount = int(args["sideimgcount"])
     steps_unpack = args["steps_unpack"]
     steps_render = args["steps_render"]
     steps_ffmpeg = args["steps_ffmpeg"]
@@ -338,6 +344,8 @@ if __name__ == "__main__":
             "CUBEMAP_HEIGHT": cubemap_height,
             "CUBEMAP_FORMAT": cubemap_format,
             "RIG_JSON_FILE": path_file_camera_rig,
+            "IPD": interpupilary_dist,
+            "SIDEIMGCOUNT": sideimgcount,
             "FLAGS_RENDER_EXTRA": render_extra_params,
         }
         render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)
