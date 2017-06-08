@@ -608,15 +608,7 @@ void prepareBottomImagesThread(
     // some cases cause an alpha-channel discontinuity at the boundary of the image, which
     // will have an effect on flow between bottom and sides. to mitigate that, we do another
     // pass of feathering on bottomSpherical before converting to polar coordinates.
-    const int yFeatherStart = bottomSpherical.rows - 1 - FLAGS_std_alpha_feather_size;
-    for (int y = yFeatherStart; y < bottomSpherical.rows; ++y) {
-      for (int x = 0; x < bottomSpherical.cols; ++x) {
-        const float alpha =
-          1.0f - float(y - yFeatherStart) / float(FLAGS_std_alpha_feather_size);
-        bottomSpherical.at<Vec4b>(y, x)[3] =
-          min(bottomSpherical.at<Vec4b>(y, x)[3], (unsigned char)(255.0f * alpha));
-      }
-    }
+    bottomSpherical = featherAlphaChannel(bottomSpherical, FLAGS_std_alpha_feather_size);
 
     if (FLAGS_save_debug_images) {
       const string debugDir =
@@ -654,14 +646,7 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
     if (topSpherical.type() != CV_8UC4) {
       cvtColor(topSpherical, topSpherical, CV_BGR2BGRA);
     }
-    const int yFeatherStart = topSpherical.rows - 1 - FLAGS_std_alpha_feather_size;
-    for (int y = yFeatherStart; y < topSpherical.rows; ++y) {
-      for (int x = 0; x < topSpherical.cols; ++x) {
-        const float alpha =
-          1.0f - float(y - yFeatherStart) / float(FLAGS_std_alpha_feather_size);
-        topSpherical.at<Vec4b>(y, x)[3] = 255.0f * alpha;
-      }
-    }
+    topSpherical = featherAlphaChannel(topSpherical, FLAGS_std_alpha_feather_size);
 
     if (FLAGS_save_debug_images) {
       const string debugDir =
