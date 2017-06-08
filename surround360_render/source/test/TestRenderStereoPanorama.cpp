@@ -621,7 +621,7 @@ void prepareBottomImagesThread(
     if (FLAGS_save_debug_images) {
       const string debugDir =
         FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
-      imwriteExceptionOnFail(debugDir + camera.id + "/_bottomSpherical.png", bottomSpherical);
+      imwriteExceptionOnFail(debugDir + "/" + camera.id + "_bottomSpherical.png", bottomSpherical);
     }
   }
 }
@@ -666,7 +666,7 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
     if (FLAGS_save_debug_images) {
       const string debugDir =
         FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
-      imwriteExceptionOnFail(debugDir + "/_topSpherical.png", topSpherical);
+      imwriteExceptionOnFail(debugDir + "/" + camera.id + "_topSpherical.png", topSpherical);
     }
   }
 }
