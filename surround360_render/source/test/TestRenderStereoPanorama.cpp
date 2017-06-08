@@ -627,45 +627,47 @@ void prepareBottomImagesThread(
 }
 
 // similar to prepareBottomImagesThread but there is no pole removal
-void prepareTopImagesThread(
-    const RigDescription& rig,
-    Mat* topSpherical) {
+void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSphericals) {
 
-  const string cameraDir = FLAGS_imgs_dir + "/" + rig.getTopCameraId();
-  const string topImageFilename = FLAGS_frame_number + ".png";
-  const string topImagePath = cameraDir + "/" + topImageFilename;
-  Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_COLOR);
-  const Camera& camera = rig.findCameraByDirection(kGlobalUp);
-  topSpherical->create(
-    FLAGS_eqr_height * camera.getFov() / M_PI,
-    FLAGS_eqr_width,
-    CV_8UC4);
-  bicubicRemapToSpherical(
-    *topSpherical,
-    topImage,
-    camera,
-    2.0f * M_PI,
-    0,
-    M_PI / 2.0f,
-    M_PI / 2.0f - camera.getFov());
+  topSphericals.resize(rig.rigTopOnly.size());
+  for (int i = 0; i < rig.rigTopOnly.size(); ++i) {
+    Mat& topSpherical = topSphericals[i];
+    const string cameraDir = FLAGS_imgs_dir + "/" + rig.rigTopOnly[i].id;
+    const string topImageFilename = FLAGS_frame_number + ".png";
+    const string topImagePath = cameraDir + "/" + topImageFilename;
+    Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_COLOR);
+    const Camera& camera = rig.rigTopOnly[i];
+    topSpherical.create(
+      FLAGS_eqr_height * camera.getFov() / M_PI,
+      FLAGS_eqr_width,
+      CV_8UC4);
+    bicubicRemapToSpherical(
+      topSpherical,
+      topImage,
+      camera,
+      2.0f * M_PI,
+      0,
+      M_PI / 2.0f,
+      M_PI / 2.0f - camera.getFov());
 
-  // alpha feather the top spherical image for flow purposes
-  if (topSpherical->type() != CV_8UC4) {
-    cvtColor(*topSpherical, *topSpherical, CV_BGR2BGRA);
-  }
-  const int yFeatherStart = topSpherical->rows - 1 - FLAGS_std_alpha_feather_size;
-  for (int y = yFeatherStart ; y < topSpherical->rows ; ++y) {
-    for (int x = 0; x < topSpherical->cols; ++x) {
-      const float alpha =
-        1.0f - float(y - yFeatherStart) / float(FLAGS_std_alpha_feather_size);
-      topSpherical->at<Vec4b>(y, x)[3] = 255.0f * alpha;
+    // alpha feather the top spherical image for flow purposes
+    if (topSpherical.type() != CV_8UC4) {
+      cvtColor(topSpherical, topSpherical, CV_BGR2BGRA);
     }
-  }
+    const int yFeatherStart = topSpherical.rows - 1 - FLAGS_std_alpha_feather_size;
+    for (int y = yFeatherStart; y < topSpherical.rows; ++y) {
+      for (int x = 0; x < topSpherical.cols; ++x) {
+        const float alpha =
+          1.0f - float(y - yFeatherStart) / float(FLAGS_std_alpha_feather_size);
+        topSpherical.at<Vec4b>(y, x)[3] = 255.0f * alpha;
+      }
+    }
 
-  if (FLAGS_save_debug_images) {
-    const string debugDir =
-      FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
-    imwriteExceptionOnFail(debugDir + "/_topSpherical.png", *topSpherical);
+    if (FLAGS_save_debug_images) {
+      const string debugDir =
+        FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
+      imwriteExceptionOnFail(debugDir + "/_topSpherical.png", topSpherical);
+    }
   }
 }
 
@@ -734,13 +736,11 @@ void renderStereoPanorama() {
 
   // top cameras are handled similar to bottom cameras- do anything we can in a thread
   // that is joined as late as possible.
-  Mat topSpherical;
+  vector<Mat> topSphericals;
   std::thread prepareTopThread;
   if (FLAGS_enable_top) {
     prepareTopThread = std::thread(
-      prepareTopImagesThread,
-      cref(rig),
-      &topSpherical);
+      prepareTopImagesThread, cref(rig), std::ref(topSphericals));
   }
 
   // projection to spherical coordinates
@@ -789,42 +789,37 @@ void renderStereoPanorama() {
   padToheight(sphericalImageL, FLAGS_eqr_height);
   padToheight(sphericalImageR, FLAGS_eqr_height);
 
-  // if both top and bottom cameras are enabled, there are 4 threads that can be done in
-  // parallel (for top/bottom, we flow to the left eye and right eye side panoramas).
-  std::thread topFlowThreadL, topFlowThreadR;
   const double topBottomToSideStartTime = getCurrTimeSec();
-
+  
   // if we have a top camera, do optical flow with its image and the side camera
-  Mat topSphericalWarpedL, topSphericalWarpedR;
+  // composite the results
   if (FLAGS_enable_top) {
     prepareTopThread.join(); // this is the latest we can wait
+    for (int i = 0; i < rig.rigTopOnly.size(); ++i) {
+      Mat topSphericalWarpedL, topSphericalWarpedR;
+      std::thread topFlowThreadL(
+        poleToSideFlowThread,
+        "top_left" + rig.rigTopOnly[i].id,
+        cref(rig),
+        &sphericalImageL,
+        &topSphericals[i],
+        &topSphericalWarpedL);
 
-    topFlowThreadL = std::thread(
-      poleToSideFlowThread,
-      "top_left",
-      cref(rig),
-      &sphericalImageL,
-      &topSpherical,
-      &topSphericalWarpedL);
+      std::thread topFlowThreadR(
+        poleToSideFlowThread,
+        "top_right" + rig.rigTopOnly[i].id,
+        cref(rig),
+        &sphericalImageR,
+        &topSphericals[i],
+        &topSphericalWarpedR);
 
-    topFlowThreadR = std::thread(
-      poleToSideFlowThread,
-      "top_right",
-      cref(rig),
-      &sphericalImageR,
-      &topSpherical,
-      &topSphericalWarpedR);
-  }
-
-  // now that all 4 possible threads have been spawned, we are ready to wait for the
-  // threads to finish, then composite the results
-  if (FLAGS_enable_top) {
-    topFlowThreadL.join();
-    topFlowThreadR.join();
-    sphericalImageL =
-      flattenLayersDeghostPreferBase(sphericalImageL, topSphericalWarpedL);
-    sphericalImageR =
-      flattenLayersDeghostPreferBase(sphericalImageR, topSphericalWarpedR);
+      topFlowThreadL.join();
+      sphericalImageL =
+        flattenLayersDeghostPreferBase(sphericalImageL, topSphericalWarpedL);
+      topFlowThreadR.join();
+      sphericalImageR =
+        flattenLayersDeghostPreferBase(sphericalImageR, topSphericalWarpedR);
+    }
   }
 
   if (FLAGS_enable_bottom) {
