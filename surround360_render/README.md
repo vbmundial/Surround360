@@ -179,6 +179,13 @@ Surround 360 is a hardware and software system for capturing and rendering 3d (s
 * Install Gooey (method 1):
   see https://github.com/chriskiehl/Gooey
 
+For Python 3:
+  until python3 compatibility is not merged see: https://github.com/arturmiller/Gooey
+  wxPython "Phoenix" version (alpha) is needed
+```
+  pip install wxPython
+```
+
 * Install Gooey (method 2 - Linux only):
 ```
   sudo apt-get install python-pip

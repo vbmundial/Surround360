@@ -20,14 +20,11 @@ from os.path import isdir, isfile, join
 from PIL import Image
 from timeit import default_timer as timer
 
-python2 = r'C:/Program Files/Python27/python.exe'
-
 current_process = None
-
 
 def signal_term_handler(signal, frame):
     if current_process:
-        print "Terminating process: " + current_process.name + "..."
+        print("Terminating process: " + current_process.name + "...")
         current_process.terminate()
     sys.exit(1)
 
@@ -70,7 +67,7 @@ UNPACK_COMMAND_TEMPLATE = """
 """
 
 RENDER_COMMAND_TEMPLATE = """
-"{python2}" {SURROUND360_RENDER_DIR}/scripts/batch_process_video.py
+"python" {SURROUND360_RENDER_DIR}/scripts/batch_process_video.py
 --flow_alg {FLOW_ALG}
 --root_dir {ROOT_DIR}
 --surround360_render_dir {SURROUND360_RENDER_DIR}
@@ -140,14 +137,14 @@ def parse_args():
     return vars(parser.parse_args())
 
 
-def print_runall_command(args):
-    cmd = python2 + " " + os.path.realpath(__file__)
-    for flag, value in args.iteritems():
-        is_boolean = type(value) == types.BooleanType
+def print_runall_command(args : dict):
+    cmd = "python " + os.path.realpath(__file__)
+    for flag, value in args.items():
+        is_boolean = isinstance(value, bool)
         if is_boolean and value is False:
             continue
         cmd += " --%s %s" % (flag, value if not is_boolean else "")
-    print cmd + "\n"
+    print(cmd + "\n")
 
 
 def start_subprocess(name, cmd):
@@ -160,7 +157,7 @@ def start_subprocess(name, cmd):
 def save_step_runtime(file_out, step, runtime_sec):
     text_runtime = "\n" + step.upper() + " runtime: " + str(datetime.timedelta(seconds=runtime_sec)) + "\n"
     file_out.write(text_runtime)
-    print text_runtime
+    print(text_runtime)
     sys.stdout.flush()
 
 
@@ -168,10 +165,10 @@ def save_step_runtime(file_out, step, runtime_sec):
 def run_step(step, cmd, verbose, dryrun, file_runtimes, num_steps, step_count=[0]):
     step_count[0] += 1
 
-    print "** %s ** [Step %d of %d]\n" % (step.upper(), step_count[0], num_steps)
+    print("** %s ** [Step %d of %d]\n" % (step.upper(), step_count[0], num_steps))
 
     if verbose:
-        print cmd + "\n"
+        print(cmd + "\n")
 
     sys.stdout.flush()
 
@@ -213,7 +210,7 @@ if __name__ == "__main__":
     steps_ffmpeg = args["steps_ffmpeg"]
     verbose = args["verbose"]
 
-    print "\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n"
+    print("\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n")
 
     if dryrun:
         verbose = True
@@ -232,7 +229,7 @@ if __name__ == "__main__":
     # os.system("mkdir -p " + dest_dir + "/logs")
     mkdir_p(dest_dir + "/logs")
 
-    print "Checking required files..."
+    print("Checking required files...")
 
     res_default_dir = surround360_render_dir + "/res"
     config_dir = dest_dir + "/config"
@@ -241,27 +238,27 @@ if __name__ == "__main__":
 
     isp_dir = config_dir + "/isp"
     if not os.path.isdir(isp_dir):
-        print "ERROR: No color adjustment files not found in " + isp_dir + "\n"
+        print("ERROR: No color adjustment files not found in " + isp_dir + "\n")
         sys.stdout.flush()
         exit(1)
 
     file_camera_rig = "camera_rig.json"
     path_file_camera_rig = config_dir + "/" + file_camera_rig
     if not os.path.isfile(path_file_camera_rig):
-        print "WARNING: Calibration file not found. Using default file.\n"
+        print("WARNING: Calibration file not found. Using default file.\n")
         sys.stdout.flush()
         path_file_camera_rig_default = res_default_dir + "/config/" + file_camera_rig
         os.system("cp " + path_file_camera_rig_default + " " + path_file_camera_rig)
 
     pole_masks_dir = dest_dir + "/pole_masks"
     if not os.path.isdir(pole_masks_dir):
-        print "WARNING: Pole masks not found. Using default files.\n"
+        print("WARNING: Pole masks not found. Using default files.\n")
         sys.stdout.flush()
         pole_masks_default_dir = res_default_dir + "/pole_masks"
         os.system("cp -R " + pole_masks_default_dir + " " + pole_masks_dir)
 
     # Open file (unbuffered)
-    file_runtimes = open(dest_dir + "/runtimes.txt", 'w', 0)
+    file_runtimes = open(dest_dir + "/runtimes.txt", 'w')
 
     start_time = timer()
 
@@ -283,7 +280,7 @@ if __name__ == "__main__":
             mkdir_p(raw_dir)
             unpack_extra_params += " --output_raw_dir " + raw_dir
             if os.path.isdir(raw_dir) and len([f for f in os.listdir(raw_dir) if not f.startswith('.')]) > 0:
-                print "ERROR: raw directory not empty!\n"
+                print("ERROR: raw directory not empty!\n")
                 sys.stdout.flush()
                 exit(1)
 
@@ -305,7 +302,7 @@ if __name__ == "__main__":
         if os.path.isdir(cam0_image_dir):
             frame_count = len(os.listdir(cam0_image_dir))
         else:
-            print "No raw images in " + cam0_image_dir
+            print("No raw images in " + cam0_image_dir)
             exit(1)
 
     file_runtimes.write("total frames: " + str(frame_count) + "\n")
@@ -333,7 +330,6 @@ if __name__ == "__main__":
             render_extra_params += " --verbose"
 
         render_params = {
-            "python2": python2,
             "SURROUND360_RENDER_DIR": surround360_render_dir,
             "FLOW_ALG": "pixflow_low",
             "ROOT_DIR": dest_dir,

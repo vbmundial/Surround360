@@ -23,7 +23,7 @@ current_process = None
 
 def signal_term_handler(signal, frame):
     if current_process:
-        print "Terminating process: " + current_process.name + "..."
+        print("Terminating process: " + current_process.name + "...")
         current_process.terminate()
     sys.exit(0)
 
@@ -138,7 +138,7 @@ if __name__ == "__main__":
         frame_to_process = format(i, "06d")
         is_first_frame = (i == min_frame)
 
-        print "----------- [Render] processing frame:", frame_to_process
+        print("----------- [Render] processing frame:", frame_to_process)
         sys.stdout.flush()
 
         debug_frame_dir = debug_dir + "/" + frame_to_process
@@ -219,7 +219,7 @@ if __name__ == "__main__":
         render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)
 
         if verbose:
-            print render_command
+            print(render_command)
             sys.stdout.flush()
 
         start_subprocess("render", render_command)
@@ -228,7 +228,7 @@ if __name__ == "__main__":
             rm_old_flow_command = "rm " + flow_dir + "/" + prev_frame_dir + "/*"
 
             if verbose:
-                print rm_old_flow_command
+                print(rm_old_flow_command)
                 sys.stdout.flush()
 
             subprocess.call(rm_old_flow_command, shell=True)
@@ -237,7 +237,7 @@ if __name__ == "__main__":
             rm_old_flow_images_command = "rm " + debug_dir + "/" + prev_frame_dir + "/flow_images/*"
 
             if verbose:
-                print rm_old_flow_images_command
+                print(rm_old_flow_images_command)
                 sys.stdout.flush()
 
             subprocess.call(rm_old_flow_images_command, shell=True)
@@ -247,6 +247,6 @@ if __name__ == "__main__":
     if verbose:
         total_runtime = end_time - start_time
         avg_runtime = total_runtime / float(max_frame - min_frame + 1)
-        print "Render total runtime:", total_runtime, "sec"
-        print "Average runtime:", avg_runtime, "sec/frame"
+        print("Render total runtime:", total_runtime, "sec")
+        print("Average runtime:", avg_runtime, "sec/frame")
         sys.stdout.flush()

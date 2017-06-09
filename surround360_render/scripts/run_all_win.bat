@@ -1,1 +1,2 @@
-"C:\Program Files\Python27\python.exe" run_all.py %*
+start python run_all.py %*
+exit
