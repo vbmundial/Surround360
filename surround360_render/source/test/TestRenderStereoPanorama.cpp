@@ -198,14 +198,16 @@ void prepareNovelViewGeneratorThread(
   Mat overlapImageR = (*imageR)(Rect(0, 0, overlapImageWidth, imageR->rows));
 
   // save the images that are going into flow. we will need them in the next frame
-  /*const string flowImagesDir =
-    FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/flow_images/";
-  imwriteExceptionOnFail(
-    flowImagesDir + "/overlap_" + std::to_string(leftIdx) + "_L.png",
-    overlapImageL);
-  imwriteExceptionOnFail(
-    flowImagesDir + "/overlap_" + std::to_string(leftIdx) + "_R.png",
-    overlapImageR);*/
+  if (FLAGS_cubemap_format == "video") {
+    const string flowImagesDir =
+      FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/flow_images/";
+    imwriteExceptionOnFail(
+      flowImagesDir + "/overlap_" + std::to_string(leftIdx) + "_L.png",
+      overlapImageL);
+    imwriteExceptionOnFail(
+      flowImagesDir + "/overlap_" + std::to_string(leftIdx) + "_R.png",
+      overlapImageR);
+  }
 
   // read the previous frame's flow results, if available
   Mat prevFrameFlowLtoR;
@@ -244,15 +246,17 @@ void prepareNovelViewGeneratorThread(
     prevOverlapImageR);
 
   // get the results of flow and save them. we will need these for temporal regularization
-  /*const Mat flowLtoR = novelViewGen->getFlowLtoR();
-  const Mat flowRtoL = novelViewGen->getFlowRtoL();
-  const string flowDir = FLAGS_output_data_dir + "/flow/" + FLAGS_frame_number;
-  saveFlowToFile(
-    flowLtoR,
-    flowDir + "/flowLtoR_" + std::to_string(leftIdx) + ".bin");
-  saveFlowToFile(
-    flowRtoL,
-    flowDir + "/flowRtoL_" + std::to_string(leftIdx) + ".bin");*/
+  if (FLAGS_cubemap_format == "video") {
+    const Mat flowLtoR = novelViewGen->getFlowLtoR();
+    const Mat flowRtoL = novelViewGen->getFlowRtoL();
+    const string flowDir = FLAGS_output_data_dir + "/flow/" + FLAGS_frame_number;
+    saveFlowToFile(
+      flowLtoR,
+      flowDir + "/flowLtoR_" + std::to_string(leftIdx) + ".bin");
+    saveFlowToFile(
+      flowRtoL,
+      flowDir + "/flowRtoL_" + std::to_string(leftIdx) + ".bin");
+  }
 }
 
 // a "chunk" is the portion from a pair of overlapping cameras. returns left/right images
@@ -449,10 +453,11 @@ void poleToSideFlowThread(
     OpticalFlowInterface::DirectionHint::DOWN);
   delete flowAlg;
 
-  /*VLOG(1) << "Serializing fisheye flow result";
-  const string flowDir = FLAGS_output_data_dir + "/flow/" + FLAGS_frame_number;
-  saveFlowToFile(flow, flowDir + "/flow_" + eyeName + ".bin");*/
-
+  if (FLAGS_cubemap_format == "video") {
+    VLOG(1) << "Serializing fisheye flow result";
+    const string flowDir = FLAGS_output_data_dir + "/flow/" + FLAGS_frame_number;
+    saveFlowToFile(flow, flowDir + "/flow_" + eyeName + ".bin");
+  }
   // make a ramp for alpha/flow magnitude
   //const float kRampFrac = 1.0f; // fraction of available overlap used for ramp
   const float kRampFrac = 1.0f; // test: fraction of available overlap used for ramp
