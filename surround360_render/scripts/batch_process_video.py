@@ -10,6 +10,7 @@ import os
 import signal
 import subprocess
 import sys
+import json
 
 from os import listdir, system
 from os.path import isfile, join
@@ -94,7 +95,6 @@ if __name__ == "__main__":
     parser.add_argument('--flow_alg', help='flow algorithm e.g., pixflow_low, pixflow_search_20', required=True)
     parser.add_argument('--verbose', dest='verbose', action='store_true')
     parser.add_argument('--interpupilary_dist', required=True)
-    parser.add_argument('--sideimgcount', required=True)
     parser.set_defaults(save_debug_images=False)
     parser.set_defaults(enable_top=False)
     parser.set_defaults(enable_bottom=False)
@@ -123,9 +123,11 @@ if __name__ == "__main__":
     flow_alg = args["flow_alg"]
     verbose = args["verbose"]
     interpupilary_dist = float(args["interpupilary_dist"])
-    sideimgcount = int(args["sideimgcount"])
-
+    
     start_time = timer()
+    with open(rig_json_file) as f:
+        rig_json = json.load(f)
+        sideimgcount = sum(c['group'] == 'side camera' for c in rig_json['cameras'])
 
     mkdir_p(out_eqr_frames_dir)
     mkdir_p(out_cube_frames_dir)

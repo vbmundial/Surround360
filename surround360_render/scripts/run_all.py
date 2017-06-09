@@ -78,8 +78,7 @@ RENDER_COMMAND_TEMPLATE = """
 --cubemap_height {CUBEMAP_HEIGHT}
 --cubemap_format {CUBEMAP_FORMAT}
 --rig_json_file {RIG_JSON_FILE}
---interpupilary_dist {IPD} 
---sideimgcount {SIDEIMGCOUNT} 
+--interpupilary_dist {IPD}
 {FLAGS_RENDER_EXTRA}
 """
 
@@ -132,7 +131,6 @@ def parse_args():
     parser.add_argument('--dryrun', help='Do not execute steps', action='store_true')
     parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
     parser.add_argument('--interpupilary_dist', metavar='IPD', help='interpupilary_dist', default='6.4')
-    parser.add_argument('--sideimgcount', metavar='Side image count', help='sideimgcount', required=True, default='0')
 
     return vars(parser.parse_args())
 
@@ -204,7 +202,6 @@ if __name__ == "__main__":
     save_raw = args["save_raw"]
     dryrun = args["dryrun"]
     interpupilary_dist = float(args["interpupilary_dist"])
-    sideimgcount = int(args["sideimgcount"])
     steps_unpack = args["steps_unpack"]
     steps_render = args["steps_render"]
     steps_ffmpeg = args["steps_ffmpeg"]
@@ -341,7 +338,6 @@ if __name__ == "__main__":
             "CUBEMAP_FORMAT": cubemap_format,
             "RIG_JSON_FILE": path_file_camera_rig,
             "IPD": interpupilary_dist,
-            "SIDEIMGCOUNT": sideimgcount,
             "FLAGS_RENDER_EXTRA": render_extra_params,
         }
         render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)
