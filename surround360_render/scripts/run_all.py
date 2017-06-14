@@ -124,7 +124,8 @@ def parse_args():
     parser.add_argument('--steps_unpack', help='Step 1: convert data in .bin files to RGB files', action='store_true',
                         required=False)
     parser.add_argument('--steps_render', help='Step 2: render stereo panoramas', action='store_true', required=False, default=True)
-    parser.add_argument('--steps_ffmpeg', help='Step 3: create video output', action='store_true', required=False)
+    parser.add_argument('--steps_metadata', help='Step 3: copy metadata on output images', action='store_true', required=False, default=True)
+    parser.add_argument('--steps_ffmpeg', help='Step 4: create video output', action='store_true', required=False)
     parser.add_argument('--enable_top', help='Enable top camera', action='store_true')
     parser.add_argument('--enable_bottom', help='Enable bottom camera', action='store_true')
     parser.add_argument('--enable_pole_removal', help='false = use primary bottom camera', action='store_true')
@@ -204,6 +205,7 @@ if __name__ == "__main__":
     interpupilary_dist = float(args["interpupilary_dist"])
     steps_unpack = args["steps_unpack"]
     steps_render = args["steps_render"]
+    steps_metadata = args["steps_metadata"]
     steps_ffmpeg = args["steps_ffmpeg"]
     verbose = args["verbose"]
 
@@ -261,7 +263,7 @@ if __name__ == "__main__":
 
     os.chdir(surround360_render_dir)
 
-    num_steps = sum([steps_unpack, steps_render, steps_ffmpeg])
+    num_steps = sum([steps_unpack, steps_render, steps_metadata, steps_ffmpeg])
 
     ### unpack step ###
 
@@ -342,6 +344,79 @@ if __name__ == "__main__":
         }
         render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)
         run_step("render", render_command, verbose, dryrun, file_runtimes, num_steps)
+
+    ### metadata step ###
+    copy_tags = [ '', 'exif:all', 'iptc:all', 'Make', 'Model', 'CodedCharacterSet', 'Lens', 'LensInfo',
+            'CountryCode', 'Country', 'State', 'City', 'Location',
+            'xmp:MetadataDate', 'photoshop:all']
+    copy_tags_param = ' -'.join(copy_tags)
+
+    with open(path_file_camera_rig) as f:
+        rig_json = json.load(f)
+    camera_count = len(rig_json['cameras'])
+    first_camera_dir = dest_dir + '/rgb/cam0'
+    last_camera_dir = dest_dir + '/rgb/cam' + str(camera_count - 1)
+
+    for i in range(start_frame, end_frame + 1):
+        frame_to_process = format(i, "06d")
+        
+        first_file = next(first_camera_dir + '/' + f for f in os.listdir(first_camera_dir) if f.startswith(frame_to_process))
+        last_file = next(last_camera_dir + '/' + f for f in os.listdir(last_camera_dir) if f.startswith(frame_to_process))
+
+        source_file = first_file
+        target_file = dest_dir + '/eqr_frames/eqr_' + frame_to_process + '.tif' 
+        copy_params = {
+            'SOURCE_FILE': source_file,
+            'TAGS': copy_tags_param,
+            'TARGET_FILE': target_file
+        }
+        copy_command = 'exiftool -TagsFromFile {SOURCE_FILE} {TAGS} {TARGET_FILE} -overwrite_original'.format(**copy_params)
+        if verbose:
+            print(copy_command)
+        start_subprocess("metadata_copy", copy_command)
+
+        if interpupilary_dist > 0:
+            continue
+        
+        # add gpano tags
+        gpano_constant_tags = {
+            'UsePanoramaViewer' : 'True',
+            'StitchingSoftware' : '"Facebook Surround 360"',
+            'ProjectionType' : '"equirectangular"',
+            'SourcePhotosCount' : str(camera_count),
+            'CroppedAreaTopPixels' : str(0),
+            'CroppedAreaLeftPixels' : str(0)
+        }
+        gpano_constant_tags_param = ' '.join(map(lambda t: '-xmp-GPano:' + t[0] + '=' + t[1], gpano_constant_tags.items()))
+        gpano_constants_params = {'TAGS': gpano_constant_tags_param, 'TARGET_FILE': target_file}
+        gpano_constants_command = 'exiftool {TAGS} {TARGET_FILE} -overwrite_original'.format(**gpano_constants_params)
+        if verbose:
+            print(gpano_constants_command)
+        start_subprocess("metadata_gpano_constants", gpano_constants_command)
+
+        gpano_firstdate_params = {'FIRST_FILE': first_file, 'TARGET_FILE': target_file}
+        gpano_firstdate_command = 'exiftool -TagsFromFile {FIRST_FILE} "-xmp-GPano:FirstPhotoDate<DateTimeOriginal"' \
+                                  ' {TARGET_FILE} -overwrite_original'.format(**gpano_firstdate_params)
+        if verbose:
+            print(gpano_firstdate_command)
+        start_subprocess("metadata_gpano_firstdate", gpano_firstdate_command)
+
+        gpano_lastdate_params = {'LAST_FILE': last_file, 'TARGET_FILE': target_file}
+        gpano_lastdate_command = 'exiftool -TagsFromFile {LAST_FILE} "-xmp-GPano:LastPhotoDate<DateTimeOriginal"' \
+                                 ' {TARGET_FILE} -overwrite_original'.format(**gpano_lastdate_params)
+        if verbose:
+            print(gpano_lastdate_command)
+        start_subprocess("metadata_gpano_lastdate", gpano_lastdate_command)
+
+        gpano_dimensions_command = 'exiftool '\
+                                   '-"CroppedAreaImageWidthPixels<$ImageWidth" '\
+                                   '-"CroppedAreaImageHeightPixels<$ImageHeight" '\
+                                   '-"FullPanoWidthPixels<$ImageWidth" '\
+                                   '-"FullPanoHeightPixels<$ImageHeight" '\
+                                   ' {} -overwrite_original'.format(target_file)
+        if verbose:
+            print(gpano_dimensions_command)
+        start_subprocess("metadata_gpano_dimensions", gpano_dimensions_command)
 
     ### ffmpeg step ###
 
