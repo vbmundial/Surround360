@@ -234,21 +234,21 @@ if __name__ == "__main__":
     mkdir_p(config_dir)
 
     isp_dir = config_dir + "/isp"
-    if not os.path.isdir(isp_dir):
+    if steps_unpack and not os.path.isdir(isp_dir):
         print("ERROR: No color adjustment files not found in " + isp_dir + "\n")
         sys.stdout.flush()
         exit(1)
 
     file_camera_rig = "camera_rig.json"
     path_file_camera_rig = config_dir + "/" + file_camera_rig
-    if not os.path.isfile(path_file_camera_rig):
+    if steps_render and not os.path.isfile(path_file_camera_rig):
         print("WARNING: Calibration file not found. Using default file.\n")
         sys.stdout.flush()
         path_file_camera_rig_default = res_default_dir + "/config/" + file_camera_rig
         os.system("cp " + path_file_camera_rig_default + " " + path_file_camera_rig)
 
     pole_masks_dir = dest_dir + "/pole_masks"
-    if not os.path.isdir(pole_masks_dir):
+    if enable_pole_removal and not os.path.isdir(pole_masks_dir):
         print("WARNING: Pole masks not found. Using default files.\n")
         sys.stdout.flush()
         pole_masks_default_dir = res_default_dir + "/pole_masks"
