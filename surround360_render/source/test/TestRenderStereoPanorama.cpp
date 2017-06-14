@@ -382,10 +382,12 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
   }
 
   panoImageL = stackHorizontal(panoChunksL);
-  panoImageR = stackHorizontal(panoChunksR);
+  if (FLAGS_interpupilary_dist != 0)
+    panoImageR = stackHorizontal(panoChunksR);
 
   panoImageL = offsetHorizontalWrap(panoImageL, zeroParallaxNovelViewShiftPixels);
-  panoImageR = offsetHorizontalWrap(panoImageR, -zeroParallaxNovelViewShiftPixels);
+  if (FLAGS_interpupilary_dist != 0)
+    panoImageR = offsetHorizontalWrap(panoImageR, -zeroParallaxNovelViewShiftPixels);
 }
 
 // handles flow between the fisheye top or bottom with the left/right eye side panoramas
@@ -766,18 +768,22 @@ void renderStereoPanorama() {
     VLOG(1) << "Offset-warping images for debugging";
     Mat wrapSphericalImageL, wrapSphericalImageR;
     wrapSphericalImageL = offsetHorizontalWrap(sphericalImageL, sphericalImageL.cols/3);
-    wrapSphericalImageR = offsetHorizontalWrap(sphericalImageR, sphericalImageR.cols/3);
+    if (FLAGS_interpupilary_dist != 0)
+      wrapSphericalImageR = offsetHorizontalWrap(sphericalImageR, sphericalImageR.cols/3);
     imwriteExceptionOnFail(debugDir + "/sphericalImgL.png", sphericalImageL);
-    imwriteExceptionOnFail(debugDir + "/sphericalImgR.png", sphericalImageR);
+    if (FLAGS_interpupilary_dist != 0)
+      imwriteExceptionOnFail(debugDir + "/sphericalImgR.png", sphericalImageR);
     imwriteExceptionOnFail(debugDir + "/sphericalImg_offsetwrapL.png", wrapSphericalImageL);
-    imwriteExceptionOnFail(debugDir + "/sphericalImg_offsetwrapR.png", wrapSphericalImageR);
+    if (FLAGS_interpupilary_dist != 0)
+      imwriteExceptionOnFail(debugDir + "/sphericalImg_offsetwrapR.png", wrapSphericalImageR);
   }
 
   // so far we only operated on the strip that contains the full vertical FOV of
   // the side cameras. before merging those results with top/bottom cameras,
   // we will pad the side images out to be a full 180 degree vertical equirect.
   padToheight(sphericalImageL, FLAGS_eqr_height);
-  padToheight(sphericalImageR, FLAGS_eqr_height);
+  if (FLAGS_interpupilary_dist != 0)
+    padToheight(sphericalImageR, FLAGS_eqr_height);
 
   const double topBottomToSideStartTime = getCurrTimeSec();
   
@@ -795,20 +801,25 @@ void renderStereoPanorama() {
         &topSphericals[i],
         &topSphericalWarpedL);
 
-      std::thread topFlowThreadR(
-        poleToSideFlowThread,
-        "top_right" + rig.rigTopOnly[i].id,
-        cref(rig),
-        &sphericalImageR,
-        &topSphericals[i],
-        &topSphericalWarpedR);
+      std::thread topFlowThreadR;
+      if (FLAGS_interpupilary_dist != 0) {
+        topFlowThreadR = std::thread(
+          poleToSideFlowThread,
+          "top_right" + rig.rigTopOnly[i].id,
+          cref(rig),
+          &sphericalImageR,
+          &topSphericals[i],
+          &topSphericalWarpedR);
+      }
 
       topFlowThreadL.join();
       sphericalImageL =
         flattenLayersDeghostPreferBase(sphericalImageL, topSphericalWarpedL);
-      topFlowThreadR.join();
-      sphericalImageR =
-        flattenLayersDeghostPreferBase(sphericalImageR, topSphericalWarpedR);
+      if (FLAGS_interpupilary_dist != 0) {
+        topFlowThreadR.join();
+        sphericalImageR =
+          flattenLayersDeghostPreferBase(sphericalImageR, topSphericalWarpedR);
+      }
     }
   }
 
@@ -828,24 +839,29 @@ void renderStereoPanorama() {
         &bottomSphericals[i],
         &bottomSphericalWarpedL);
 
-      flip(sphericalImageR, flipSphericalImageR, -1);
-      thread bottomFlowThreadR(
-        poleToSideFlowThread,
-        "bottom_right" + rig.rigBottomOnly[i].id,
-        cref(rig),
-        &flipSphericalImageR,
-        &bottomSphericals[i],
-        &bottomSphericalWarpedR);
+      thread bottomFlowThreadR;
+      if (FLAGS_interpupilary_dist != 0) {
+        flip(sphericalImageR, flipSphericalImageR, -1);
+        bottomFlowThreadR = std::thread(
+          poleToSideFlowThread,
+          "bottom_right" + rig.rigBottomOnly[i].id,
+          cref(rig),
+          &flipSphericalImageR,
+          &bottomSphericals[i],
+          &bottomSphericalWarpedR);
+      }
 
       bottomFlowThreadL.join();
       flipSphericalImageL =
         flattenLayersDeghostPreferBase(flipSphericalImageL, bottomSphericalWarpedL);
       
-      bottomFlowThreadR.join();
-      flipSphericalImageR =
-        flattenLayersDeghostPreferBase(flipSphericalImageR, bottomSphericalWarpedR);
+      if (FLAGS_interpupilary_dist != 0) {
+        bottomFlowThreadR.join();
+        flipSphericalImageR =
+          flattenLayersDeghostPreferBase(flipSphericalImageR, bottomSphericalWarpedR);
+        flip(flipSphericalImageR, sphericalImageR, -1);
+      }
       flip(flipSphericalImageL, sphericalImageL, -1);
-      flip(flipSphericalImageR, sphericalImageR, -1);
     } 
   }
   const double topBottomToSideEndTime = getCurrTimeSec();
@@ -855,24 +871,30 @@ void renderStereoPanorama() {
   if (sphericalImageL.type() != CV_8UC3) {
     VLOG(1) << "Flattening from 4 channels to 3 channels";
     cvtColor(sphericalImageL, sphericalImageL, CV_BGRA2BGR);
-    cvtColor(sphericalImageR, sphericalImageR, CV_BGRA2BGR);
+    if (FLAGS_interpupilary_dist != 0)
+      cvtColor(sphericalImageR, sphericalImageR, CV_BGRA2BGR);
   }
 
   if (FLAGS_save_debug_images) {
     imwriteExceptionOnFail(debugDir + "/eqr_sideL.png", sphericalImageL);
-    imwriteExceptionOnFail(debugDir + "/eqr_sideR.png", sphericalImageR);
+    if (FLAGS_interpupilary_dist != 0)
+      imwriteExceptionOnFail(debugDir + "/eqr_sideR.png", sphericalImageR);
   }
 
   const double startSharpenTime = getCurrTimeSec();
   if (FLAGS_sharpenning > 0.0f) {
     VLOG(1) << "Sharpening";
     std::thread sharpenThreadL(sharpenThread, &sphericalImageL);
-    std::thread sharpenThreadR(sharpenThread, &sphericalImageR);
+    std::thread sharpenThreadR;
+    if (FLAGS_interpupilary_dist != 0)
+      sharpenThreadR = std::thread(sharpenThread, &sphericalImageR);
     sharpenThreadL.join();
-    sharpenThreadR.join();
+    if (FLAGS_interpupilary_dist != 0)
+      sharpenThreadR.join();
     if (FLAGS_save_debug_images) {
       imwriteExceptionOnFail(debugDir + "/_eqr_sideL_sharpened.png", sphericalImageL);
-      imwriteExceptionOnFail(debugDir + "/_eqr_sideR_sharpened.png", sphericalImageR);
+      if (FLAGS_interpupilary_dist != 0)
+        imwriteExceptionOnFail(debugDir + "/_eqr_sideR_sharpened.png", sphericalImageR);
     }
   }
   const double endSharpenTime = getCurrTimeSec();
@@ -889,14 +911,18 @@ void renderStereoPanorama() {
           M_PI,
           FLAGS_cubemap_width,
           FLAGS_cubemap_height));
-    Mat cubemapImageR = stackOutputCubemapFaces(
+    if (FLAGS_interpupilary_dist != 0) {
+      Mat cubemapImageR = stackOutputCubemapFaces(
         FLAGS_cubemap_format, convertSphericalToCubemapBicubicRemap(
           sphericalImageR,
           M_PI,
           FLAGS_cubemap_width,
           FLAGS_cubemap_height));
-    Mat stereoCubemap = stackVertical(vector<Mat>({cubemapImageL, cubemapImageR}));
-    imwriteExceptionOnFail(FLAGS_output_cubemap_path, stereoCubemap);
+      Mat stereoCubemap = stackVertical(vector<Mat>({ cubemapImageL, cubemapImageR }));
+      imwriteExceptionOnFail(FLAGS_output_cubemap_path, stereoCubemap);
+    } else {
+      imwriteExceptionOnFail(FLAGS_output_cubemap_path, cubemapImageL);
+    }
   }
   const double endCubemapTime = getCurrTimeSec();
 
@@ -912,18 +938,25 @@ void renderStereoPanorama() {
       0,
       0,
       INTER_CUBIC);
-    resize(
-      sphericalImageR,
-      sphericalImageR,
-      Size(FLAGS_final_eqr_width, FLAGS_final_eqr_height / 2),
-      0,
-      0,
-      INTER_CUBIC);
+    if (FLAGS_interpupilary_dist != 0) {
+      resize(
+        sphericalImageR,
+        sphericalImageR,
+        Size(FLAGS_final_eqr_width, FLAGS_final_eqr_height / 2),
+        0,
+        0,
+        INTER_CUBIC);
+    }
   }
 
   LOG(INFO) << "Creating stereo equirectangular image";
-  Mat stereoEquirect = stackVertical(vector<Mat>({sphericalImageL, sphericalImageR}));
-  imwriteExceptionOnFail(FLAGS_output_equirect_path, stereoEquirect);
+
+   if (FLAGS_interpupilary_dist != 0) {
+    Mat stereoEquirect = stackVertical(vector<Mat>({ sphericalImageL, sphericalImageR }));
+    imwriteExceptionOnFail(FLAGS_output_equirect_path, stereoEquirect);
+   } else {
+     imwriteExceptionOnFail(FLAGS_output_equirect_path, sphericalImageL);
+   }
 
   const double endTime = getCurrTimeSec();
   VLOG(1) << "--- Runtime breakdown (sec) ---";
