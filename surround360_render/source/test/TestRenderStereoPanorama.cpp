@@ -49,7 +49,7 @@ DEFINE_string(prev_frame_data_dir,        "NONE",         "path to data for prev
 DEFINE_string(output_cubemap_path,        "",             "path to write output oculus 360 cubemap");
 DEFINE_string(output_equirect_path,       "",             "path to write output oculus 360 cubemap");
 DEFINE_double(interpupilary_dist,         6.4,            "separation of eyes for stereo, spherical_in whatever units the rig json uses.");
-DEFINE_int32(side_alpha_feather_size,     100,            "alpha feather for projection of side cameras to spherical coordinates");
+DEFINE_int32(side_alpha_feather_size,     101,            "alpha feather for projection of side cameras to spherical coordinates");
 DEFINE_int32(std_alpha_feather_size,      31,             "alpha feather for all other purposes. must be odd");
 DEFINE_bool(save_debug_images,            false,          "if true, lots of debug images are generated");
 DEFINE_double(sharpenning,                0.0f,           "0.0 to 1.0 amount of sharpenning");
@@ -114,14 +114,7 @@ void projectSideToSpherical(
   }
   // feather
   if (FLAGS_side_alpha_feather_size) {
-    for (int y = 0; y < FLAGS_side_alpha_feather_size; ++y) {
-      const uint8_t alpha =
-        255.0f * float(y + 0.5f) / float(FLAGS_side_alpha_feather_size);
-      for (int x = 0; x < tmp.cols; ++x) {
-        tmp.at<Vec4b>(y, x)[3] = alpha;
-        tmp.at<Vec4b>(tmp.rows - 1 - y, x)[3] = alpha;
-      }
-    }
+    tmp = featherAlphaChannel(tmp, FLAGS_side_alpha_feather_size);
   }
   // remap
   bicubicRemapToSpherical(
@@ -179,7 +172,7 @@ void projectSphericalCamImages(
       FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/projections/";
     for (int camIdx = 0; camIdx < rig.getSideCameraCount(); ++camIdx) {
       const string cropImageFilename = projectionsDir +
-        "/crop_" + rig.getSideCameraId(camIdx) + ".png";
+        "/crop_" + rig.getSideCameraId(camIdx) + ".tif";
       imwriteExceptionOnFail(cropImageFilename, projectionImages[camIdx]);
     }
   }
@@ -202,10 +195,10 @@ void prepareNovelViewGeneratorThread(
     const string flowImagesDir =
       FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/flow_images/";
     imwriteExceptionOnFail(
-      flowImagesDir + "/overlap_" + std::to_string(leftIdx) + "_L.png",
+      flowImagesDir + "/overlap_" + std::to_string(leftIdx) + "_L.tif",
       overlapImageL);
     imwriteExceptionOnFail(
-      flowImagesDir + "/overlap_" + std::to_string(leftIdx) + "_R.png",
+      flowImagesDir + "/overlap_" + std::to_string(leftIdx) + "_R.tif",
       overlapImageR);
   }
 
@@ -228,10 +221,10 @@ void prepareNovelViewGeneratorThread(
     prevFrameFlowRtoL = readFlowFromFile(
       flowPrevDir + "/flowRtoL_" + std::to_string(leftIdx) + ".bin");
     prevOverlapImageL = imreadExceptionOnFail(
-      flowImagesPrevDir + "/overlap_" + std::to_string(leftIdx) + "_L.png",
+      flowImagesPrevDir + "/overlap_" + std::to_string(leftIdx) + "_L.tif",
       -1);
     prevOverlapImageR = imreadExceptionOnFail(
-      flowImagesPrevDir + "/overlap_" + std::to_string(leftIdx) + "_R.png",
+      flowImagesPrevDir + "/overlap_" + std::to_string(leftIdx) + "_R.tif",
       -1);
     VLOG(1) << "Loaded previous frame's flow OK";
   }
@@ -419,8 +412,8 @@ void poleToSideFlowThread(
   if (FLAGS_save_debug_images) {
     const string flowImagesDir =
       FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/flow_images/";
-    imwriteExceptionOnFail(flowImagesDir + "/extendedSideSpherical_" + eyeName + ".png", extendedSideSpherical);
-    imwriteExceptionOnFail(flowImagesDir + "/extendedFisheyeSpherical_" + eyeName + ".png", extendedFisheyeSpherical);
+    imwriteExceptionOnFail(flowImagesDir + "/extendedSideSpherical_" + eyeName + ".tif", extendedSideSpherical);
+    imwriteExceptionOnFail(flowImagesDir + "/extendedFisheyeSpherical_" + eyeName + ".tif", extendedFisheyeSpherical);
   }
 
   Mat prevFisheyeFlow;
@@ -438,9 +431,9 @@ void poleToSideFlowThread(
     prevFisheyeFlow = readFlowFromFile(
       flowPrevDir + "/flow_" + eyeName + ".bin");
     prevExtendedSideSpherical = imreadExceptionOnFail(
-      flowImagesPrevDir + "/extendedSideSpherical_" + eyeName + ".png", -1);
+      flowImagesPrevDir + "/extendedSideSpherical_" + eyeName + ".tif", -1);
     prevExtendedFisheyeSpherical = imreadExceptionOnFail(
-      flowImagesPrevDir + "/extendedFisheyeSpherical_" + eyeName + ".png", -1);
+      flowImagesPrevDir + "/extendedFisheyeSpherical_" + eyeName + ".tif", -1);
   }
 
   Mat flow;
@@ -559,13 +552,13 @@ void poleToSideFlowThread(
     const string debugDir =
       FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
     imwriteExceptionOnFail(
-      debugDir + "/croppedSideSpherical_" + eyeName + ".png",
+      debugDir + "/croppedSideSpherical_" + eyeName + ".tif",
       croppedSideSpherical);
     imwriteExceptionOnFail(
-      debugDir + "/warpedSpherical_" + eyeName + ".png",
+      debugDir + "/warpedSpherical_" + eyeName + ".tif",
       *warpedSphericalForEye);
     imwriteExceptionOnFail(
-      debugDir + "/extendedSideSpherical_" + eyeName + ".png",
+      debugDir + "/extendedSideSpherical_" + eyeName + ".tif",
       extendedSideSpherical);
   }
 }
@@ -580,21 +573,16 @@ void prepareBottomImagesThread(
     Mat& bottomSpherical = bottomSphericals[i];
 
     const string cameraDir = FLAGS_imgs_dir + "/" + rig.rigBottomOnly[i].id;
-    const string bottomImagePath = cameraDir + "/" + FLAGS_frame_number + ".png";
+    const string bottomImagePath = cameraDir + "/" + FLAGS_frame_number + ".tif";
     Mat bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_UNCHANGED);
     if (FLAGS_enable_pole_removal) {
       if (bottomImage.channels() != 4) {
         cvtColor(bottomImage, bottomImage, CV_BGR2BGRA);
         const string poleMaskPath = FLAGS_bottom_pole_masks_dir + "/" 
-                                  + rig.rigBottomOnly[i].id + ".png";
+                                  + rig.rigBottomOnly[i].id + ".tif";
         Mat bottomRedMask = imreadExceptionOnFail(poleMaskPath, CV_LOAD_IMAGE_COLOR);
         cutRedMaskOutOfAlphaChannel(bottomImage, bottomRedMask);
       }
-      // Somehow (0,0,0,0) is treated as trasparent, while sometimes (255,255,255,0) is not.
-      // PNG with transparency is loaded with (255,255,255,0) pixels
-      Mat mask;
-      inRange(bottomImage, Vec4b(255, 255, 255, 0), Vec4b(255, 255, 255, 0), mask);
-      bottomImage.setTo(Vec4b(0, 0, 0, 0), mask);
     }
 
     const Camera& camera = rig.rigBottomOnly[i];
@@ -620,7 +608,7 @@ void prepareBottomImagesThread(
     if (FLAGS_save_debug_images) {
       const string debugDir =
         FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
-      imwriteExceptionOnFail(debugDir + "/" + camera.id + "_bottomSpherical.png", bottomSpherical);
+      imwriteExceptionOnFail(debugDir + "/" + camera.id + "_bottomSpherical.tif", bottomSpherical);
     }
   }
 }
@@ -632,7 +620,7 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
   for (int i = 0; i < rig.rigTopOnly.size(); ++i) {
     Mat& topSpherical = topSphericals[i];
     const string cameraDir = FLAGS_imgs_dir + "/" + rig.rigTopOnly[i].id;
-    const string topImageFilename = FLAGS_frame_number + ".png";
+    const string topImageFilename = FLAGS_frame_number + ".tif";
     const string topImagePath = cameraDir + "/" + topImageFilename;
     Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_COLOR);
     const Camera& camera = rig.rigTopOnly[i];
@@ -658,7 +646,7 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
     if (FLAGS_save_debug_images) {
       const string debugDir =
         FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number;
-      imwriteExceptionOnFail(debugDir + "/" + camera.id + "_topSpherical.png", topSpherical);
+      imwriteExceptionOnFail(debugDir + "/" + camera.id + "_topSpherical.tif", topSpherical);
     }
   }
 }
@@ -770,12 +758,12 @@ void renderStereoPanorama() {
     wrapSphericalImageL = offsetHorizontalWrap(sphericalImageL, sphericalImageL.cols/3);
     if (FLAGS_interpupilary_dist != 0)
       wrapSphericalImageR = offsetHorizontalWrap(sphericalImageR, sphericalImageR.cols/3);
-    imwriteExceptionOnFail(debugDir + "/sphericalImgL.png", sphericalImageL);
+    imwriteExceptionOnFail(debugDir + "/sphericalImgL.tif", sphericalImageL);
     if (FLAGS_interpupilary_dist != 0)
-      imwriteExceptionOnFail(debugDir + "/sphericalImgR.png", sphericalImageR);
-    imwriteExceptionOnFail(debugDir + "/sphericalImg_offsetwrapL.png", wrapSphericalImageL);
+      imwriteExceptionOnFail(debugDir + "/sphericalImgR.tif", sphericalImageR);
+    imwriteExceptionOnFail(debugDir + "/sphericalImg_offsetwrapL.tif", wrapSphericalImageL);
     if (FLAGS_interpupilary_dist != 0)
-      imwriteExceptionOnFail(debugDir + "/sphericalImg_offsetwrapR.png", wrapSphericalImageR);
+      imwriteExceptionOnFail(debugDir + "/sphericalImg_offsetwrapR.tif", wrapSphericalImageR);
   }
 
   // so far we only operated on the strip that contains the full vertical FOV of
@@ -876,9 +864,9 @@ void renderStereoPanorama() {
   }
 
   if (FLAGS_save_debug_images) {
-    imwriteExceptionOnFail(debugDir + "/eqr_sideL.png", sphericalImageL);
+    imwriteExceptionOnFail(debugDir + "/eqr_sideL.tif", sphericalImageL);
     if (FLAGS_interpupilary_dist != 0)
-      imwriteExceptionOnFail(debugDir + "/eqr_sideR.png", sphericalImageR);
+      imwriteExceptionOnFail(debugDir + "/eqr_sideR.tif", sphericalImageR);
   }
 
   const double startSharpenTime = getCurrTimeSec();
@@ -892,9 +880,9 @@ void renderStereoPanorama() {
     if (FLAGS_interpupilary_dist != 0)
       sharpenThreadR.join();
     if (FLAGS_save_debug_images) {
-      imwriteExceptionOnFail(debugDir + "/_eqr_sideL_sharpened.png", sphericalImageL);
+      imwriteExceptionOnFail(debugDir + "/_eqr_sideL_sharpened.tif", sphericalImageL);
       if (FLAGS_interpupilary_dist != 0)
-        imwriteExceptionOnFail(debugDir + "/_eqr_sideR_sharpened.png", sphericalImageR);
+        imwriteExceptionOnFail(debugDir + "/_eqr_sideR_sharpened.tif", sphericalImageR);
     }
   }
   const double endSharpenTime = getCurrTimeSec();

@@ -36,8 +36,8 @@ RENDER_COMMAND_TEMPLATE = """
 --frame_number {FRAME_ID}
 --output_data_dir {SRC_DIR}
 --prev_frame_data_dir {PREV_FRAME_DIR}
---output_cubemap_path {OUT_CUBE_DIR}/cube_{FRAME_ID}.png
---output_equirect_path {OUT_EQR_DIR}/eqr_{FRAME_ID}.png
+--output_cubemap_path {OUT_CUBE_DIR}/cube_{FRAME_ID}.tif
+--output_equirect_path {OUT_EQR_DIR}/eqr_{FRAME_ID}.tif
 --cubemap_format {CUBEMAP_FORMAT}
 --side_flow_alg {SIDE_FLOW_ALGORITHM}
 --polar_flow_alg {POLAR_FLOW_ALGORITHM}

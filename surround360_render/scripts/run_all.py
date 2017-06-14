@@ -86,7 +86,7 @@ FFMPEG_COMMAND_TEMPLATE = """
 ffmpeg
 -framerate 30
 -start_number {START_NUMBER}
--i {ROOT_DIR}/eqr_frames/eqr_%06d.png
+-i {ROOT_DIR}/eqr_frames/eqr_%06d.tif
 -pix_fmt yuv420p
 -c:v libx264
 -crf 10
