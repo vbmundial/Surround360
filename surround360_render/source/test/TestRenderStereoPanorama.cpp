@@ -8,11 +8,10 @@
 */
 
 #include <fstream>
-#include <iostream>
-#include <map>
 #include <string>
 #include <thread>
 #include <vector>
+#include <numeric>
 
 #include "Camera.h"
 #include "CvUtil.h"
@@ -22,15 +21,14 @@
 #include "MonotonicTable.h"
 #include "NovelView.h"
 #include "OpticalFlowFactory.h"
-#include "OpticalFlowVisualization.h"
-#include "PoleRemoval.h"
 #include "RigDescription.h"
-#include "StringUtil.h"
 #include "SystemUtil.h"
 #include "VrCamException.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#include <opencv2/stitching.hpp>
+#include <opencv2/stitching/detail/exposure_compensate.hpp>
 
 using namespace cv;
 using namespace std;
@@ -57,6 +55,8 @@ DEFINE_bool(enable_top,                   false,          "is there a top camera
 DEFINE_bool(enable_bottom,                false,          "are there two bottom cameras?");
 DEFINE_bool(enable_pole_removal,          false,          "if true, pole removal masks are used; if false, primary bottom camera is used");
 DEFINE_string(bottom_pole_masks_dir,      "",             "path to bottom camera pole masks dir");
+DEFINE_bool(enable_exposure_comp,         false,          "do exposure compensation?");
+DEFINE_int32(exposure_comp_block_size,    0,             "exposure compensation block size for block-gain based correction, 0 for auto");
 DEFINE_string(side_flow_alg,              "pixflow_low",  "which optical flow algorithm to use for sides");
 DEFINE_string(polar_flow_alg,             "pixflow_low",  "which optical flow algorithm to use for top/bottom warp with sides");
 DEFINE_string(poleremoval_flow_alg,       "pixflow_low",  "which optical flow algorithm to use for pole removal with secondary bottom camera");
@@ -599,6 +599,10 @@ void prepareBottomImagesThread(
       -(M_PI / 2.0f),
       -(M_PI / 2.0f - camera.getFov()));
 
+    // Remove upper half of projected image (it is flipped, so lower half)
+    Size size = bottomSpherical.size();
+    bottomSpherical(Rect(0, size.height / 2, size.width, size.height / 2)) = Vec4b(0,0,0,0);
+
     // the alpha channel in bottomSpherical is the result of pole removal/flow. this can in
     // some cases cause an alpha-channel discontinuity at the boundary of the image, which
     // will have an effect on flow between bottom and sides. to mitigate that, we do another
@@ -641,6 +645,11 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
     if (topSpherical.type() != CV_8UC4) {
       cvtColor(topSpherical, topSpherical, CV_BGR2BGRA);
     }
+
+    // Remove lower half of projected image
+    Size size = topSpherical.size();
+    topSpherical(Rect(0, size.height / 2, size.width, size.height / 2)) = Vec4b(0, 0, 0, 0);
+
     topSpherical = featherAlphaChannel(topSpherical, FLAGS_std_alpha_feather_size);
 
     if (FLAGS_save_debug_images) {
@@ -677,6 +686,27 @@ void padToheight(Mat& unpaddedImage, const int targetHeight) {
     0,
     BORDER_CONSTANT,
     Scalar(0.0, 0.0, 0.0));
+}
+
+void splitAlphaMask(Mat& image, Mat& mask)
+{
+  CV_Assert(image.type() == CV_8UC4);
+  vector<Mat> channels(4);
+  split(image, channels);
+  mask = channels.back();
+
+  channels.pop_back();
+  merge(channels, image);
+}
+
+void mergeAlphaMask(Mat& image, const Mat& mask)
+{
+  CV_Assert(image.type() == CV_8UC3 && mask.type() == CV_8UC1);
+  // add alpha channel
+  vector<Mat> channels(3);
+  split(image, channels);
+  channels.push_back(mask);
+  merge(channels, image);
 }
 
 // run the whole stereo panorama rendering pipeline
@@ -737,6 +767,77 @@ void renderStereoPanorama() {
   projectSphericalCamImages(rig, FLAGS_imgs_dir, FLAGS_frame_number, projectionImages);
   const double endProjectSphericalTime = getCurrTimeSec();
 
+  // Do exposure compensation
+  if (FLAGS_enable_exposure_comp) {
+    if (FLAGS_enable_top) {
+      prepareTopThread.join(); // this is the latest we can wait
+    }
+    if (FLAGS_enable_bottom) {
+      prepareBottomThread.join(); // this is the latest we can wait
+    }
+
+    vector<Mat*> images;
+    vector<Point> corners;
+    int stripWidth = FLAGS_eqr_width / projectionImages.size();
+    int sideImagesYcorner = FLAGS_eqr_height / 2 - projectionImages[0].size().height / 2;
+    for (int i = 0; i < projectionImages.size(); ++i) {
+      images.push_back(&projectionImages[i]);
+      corners.push_back({ i * stripWidth, sideImagesYcorner });
+    }
+    for (int i = 0; i < topSphericals.size(); ++i) {
+      images.push_back(&topSphericals[i]);
+      corners.push_back({ 0, 0 });
+    }
+    for (int i = 0; i < bottomSphericals.size(); ++i) {
+      flip(bottomSphericals[i], bottomSphericals[i], -1);
+      images.push_back(&bottomSphericals[i]);
+      corners.push_back({ 0, 0 });
+    }
+    int imageCount = images.size();
+
+    vector<Mat> masks;
+    vector<pair<UMat, uchar>> maskUMatPairs;
+    vector<UMat> imageUMats;
+    for (Mat * image : images) {
+      Mat mask;
+      splitAlphaMask(*image, mask);
+      masks.push_back(move(mask));
+      maskUMatPairs.push_back({ masks.back().getUMat(ACCESS_READ), 255 });
+      imageUMats.push_back(image->getUMat(ACCESS_RW));
+    }
+
+    // Compensate for 360 overlap
+    imageUMats.reserve(3 * imageCount);
+    maskUMatPairs.reserve(3 * imageCount);
+    corners.reserve(3 * imageCount);
+    for (int i = 0; i < 2; ++i) {
+      copy_n(imageUMats.begin(), imageCount, back_inserter(imageUMats));
+      copy_n(maskUMatPairs.begin(), imageCount, back_inserter(maskUMatPairs));
+      copy_n(corners.begin(), imageCount, back_inserter(corners));  
+    }
+    
+    for (int i = 0; i < imageCount; ++i) {
+      corners[imageCount + i].x += FLAGS_eqr_width;
+      corners[2 * imageCount + i].x -= FLAGS_eqr_width;
+    }
+
+    int blockSize = FLAGS_exposure_comp_block_size;
+    if (FLAGS_exposure_comp_block_size <= 0) {
+      blockSize = FLAGS_eqr_width / 16;
+    }
+    BlocksGainCompensator compensator(blockSize, blockSize);
+    compensator.feed(corners, imageUMats, maskUMatPairs);
+
+    for (int i = 0; i < imageCount; ++i) {
+      compensator.apply(i, corners[i], imageUMats[i], maskUMatPairs[i].first);
+      mergeAlphaMask(*images[i], masks[i]);
+    }
+
+    for (int i = 0; i < bottomSphericals.size(); ++i) {
+      flip(bottomSphericals[i], bottomSphericals[i], -1); // flip back
+    }
+  }
+
   // generate novel views and stereo spherical panoramas
   double opticalFlowRuntime, novelViewRuntime;
   Mat sphericalImageL, sphericalImageR;
@@ -778,7 +879,9 @@ void renderStereoPanorama() {
   // if we have a top camera, do optical flow with its image and the side camera
   // composite the results
   if (FLAGS_enable_top) {
-    prepareTopThread.join(); // this is the latest we can wait
+    if (!FLAGS_enable_exposure_comp) {
+      prepareTopThread.join(); // this is the latest we can wait
+    }
     for (int i = 0; i < rig.rigTopOnly.size(); ++i) {
       Mat topSphericalWarpedL, topSphericalWarpedR;
       std::thread topFlowThreadL(
@@ -812,7 +915,10 @@ void renderStereoPanorama() {
   }
 
   if (FLAGS_enable_bottom) {
-    prepareBottomThread.join(); // this is the latest we can wait
+    if (!FLAGS_enable_exposure_comp) {
+      prepareBottomThread.join(); // this is the latest we can wait
+    }
+
     for (int i = 0; i < rig.rigBottomOnly.size(); ++i) {
       Mat bottomSphericalWarpedL, bottomSphericalWarpedR;
       // flip the side images upside down for bottom flow

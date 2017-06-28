@@ -48,6 +48,7 @@ RENDER_COMMAND_TEMPLATE = """
 --eqr_height {EQR_HEIGHT}
 --final_eqr_width {FINAL_EQR_WIDTH}
 --final_eqr_height {FINAL_EQR_HEIGHT}
+--exposure_comp_block_size {EXPOSURE_COMP_BLOCK_SIZE}
 --interpupilary_dist {IPD}
 --zero_parallax_dist 10000
 --sharpenning {SHARPENNING}
@@ -89,6 +90,8 @@ if __name__ == "__main__":
     parser.add_argument('--enable_top', dest='enable_top', action='store_true')
     parser.add_argument('--enable_bottom', dest='enable_bottom', action='store_true')
     parser.add_argument('--enable_pole_removal', dest='enable_pole_removal', action='store_true')
+    parser.add_argument('--enable_exposure_comp', help='Enable exposure compensation', action='store_true')
+    parser.add_argument('--exposure_comp_block_size', help='0 = auto', default=0)
     parser.add_argument('--resume', dest='resume', action='store_true',
                         help='looks for a previous frame optical flow instead of starting fresh')
     parser.add_argument('--rig_json_file', help='path to rig json file', required=True)
@@ -118,6 +121,8 @@ if __name__ == "__main__":
     enable_top = args["enable_top"]
     enable_bottom = args["enable_bottom"]
     enable_pole_removal = args["enable_pole_removal"]
+    enable_exposure_comp = args["enable_exposure_comp"]
+    exposure_comp_block_size = int(args["exposure_comp_block_size"])
     resume = args["resume"]
     rig_json_file = args["rig_json_file"]
     flow_alg = args["flow_alg"]
@@ -168,6 +173,7 @@ if __name__ == "__main__":
             "POLAR_FLOW_ALGORITHM": flow_alg,
             "POLEREMOVAL_FLOW_ALGORITHM": flow_alg,
             "EXTRA_FLAGS": "",
+            "EXPOSURE_COMP_BLOCK_SIZE": exposure_comp_block_size,
             "IPD": interpupilary_dist
         }
 
@@ -189,6 +195,9 @@ if __name__ == "__main__":
             if enable_pole_removal:
                 render_params["EXTRA_FLAGS"] += " --enable_pole_removal"
                 render_params["EXTRA_FLAGS"] += " --bottom_pole_masks_dir " + root_dir + "/pole_masks"
+        
+        if enable_exposure_comp:
+            render_params["EXTRA_FLAGS"] += " --enable_exposure_comp"
 
         if quality == "3k":
             render_params["SHARPENNING"] = 0.25

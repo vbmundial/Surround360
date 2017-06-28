@@ -78,6 +78,7 @@ RENDER_COMMAND_TEMPLATE = """
 --cubemap_height {CUBEMAP_HEIGHT}
 --cubemap_format {CUBEMAP_FORMAT}
 --rig_json_file {RIG_JSON_FILE}
+--exposure_comp_block_size {EXPOSURE_COMP_BLOCK_SIZE}
 --interpupilary_dist {IPD}
 {FLAGS_RENDER_EXTRA}
 """
@@ -129,9 +130,11 @@ def parse_args():
     parser.add_argument('--enable_top', help='Enable top camera', action='store_true')
     parser.add_argument('--enable_bottom', help='Enable bottom camera', action='store_true')
     parser.add_argument('--enable_pole_removal', help='false = use primary bottom camera', action='store_true')
+    parser.add_argument('--enable_exposure_comp', help='Enable exposure compensation', action='store_true')
+    parser.add_argument('--exposure_comp_block_size', metavar='Exposure compensation block size', help='0 = auto', default='0')
     parser.add_argument('--dryrun', help='Do not execute steps', action='store_true')
     parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
-    parser.add_argument('--interpupilary_dist', metavar='IPD', help='interpupilary_dist', default='6.4')
+    parser.add_argument('--interpupilary_dist', metavar='IPD', help='interpupilary distance', default='6.4')
 
     return vars(parser.parse_args())
 
@@ -199,6 +202,8 @@ if __name__ == "__main__":
     enable_top = args["enable_top"]
     enable_bottom = args["enable_bottom"]
     enable_pole_removal = args["enable_pole_removal"]
+    enable_exposure_comp = args["enable_exposure_comp"]
+    exposure_comp_block_size = int(args["exposure_comp_block_size"])
     save_debug_images = args["save_debug_images"]
     save_raw = args["save_raw"]
     dryrun = args["dryrun"]
@@ -321,6 +326,9 @@ if __name__ == "__main__":
 
             if enable_pole_removal:
                 render_extra_params += " --enable_pole_removal"
+        
+        if enable_exposure_comp:
+            render_extra_params += " --enable_exposure_comp"
 
         if save_debug_images:
             render_extra_params += " --save_debug_images"
@@ -339,6 +347,7 @@ if __name__ == "__main__":
             "CUBEMAP_HEIGHT": cubemap_height,
             "CUBEMAP_FORMAT": cubemap_format,
             "RIG_JSON_FILE": path_file_camera_rig,
+            "EXPOSURE_COMP_BLOCK_SIZE": exposure_comp_block_size,
             "IPD": interpupilary_dist,
             "FLAGS_RENDER_EXTRA": render_extra_params,
         }
