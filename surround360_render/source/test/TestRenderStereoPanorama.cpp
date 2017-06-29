@@ -626,7 +626,7 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
     const string cameraDir = FLAGS_imgs_dir + "/" + rig.rigTopOnly[i].id;
     const string topImageFilename = FLAGS_frame_number + ".tif";
     const string topImagePath = cameraDir + "/" + topImageFilename;
-    Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_COLOR);
+    Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_UNCHANGED);
     const Camera& camera = rig.rigTopOnly[i];
     topSpherical.create(
       FLAGS_eqr_height * camera.getFov() / M_PI,
