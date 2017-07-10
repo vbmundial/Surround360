@@ -50,6 +50,8 @@ RENDER_COMMAND_TEMPLATE = """
 --final_eqr_height {FINAL_EQR_HEIGHT}
 --exposure_comp_block_size {EXPOSURE_COMP_BLOCK_SIZE}
 --interpupilary_dist {IPD}
+--side_alpha_feather_size {SIDE_ALPHA_FEATHER_SIZE}
+--std_alpha_feather_size {STD_ALPHA_FEATHER_SIZE}
 --zero_parallax_dist 10000
 --sharpenning {SHARPENNING}
 {EXTRA_FLAGS}
@@ -82,7 +84,7 @@ if __name__ == "__main__":
                         required=False, default='.')
     parser.add_argument('--start_frame', help='first frame index', required=True)
     parser.add_argument('--end_frame', help='last frame index', required=True)
-    parser.add_argument('--quality', help='3k,4k,6k,8k', required=True)
+    parser.add_argument('--quality', help='2k,4k,6k,8k', required=True)
     parser.add_argument('--cubemap_width', help='default is to not generate cubemaps', required=False, default=0)
     parser.add_argument('--cubemap_height', help='default is to not generate cubemaps', required=False, default=0)
     parser.add_argument('--cubemap_format', help='photo,video', required=False, default='photo')
@@ -199,30 +201,38 @@ if __name__ == "__main__":
         if enable_exposure_comp:
             render_params["EXTRA_FLAGS"] += " --enable_exposure_comp"
 
-        if quality == "3k":
-            render_params["SHARPENNING"] = 0.25
-            render_params["EQR_WIDTH"] = (int(3080 / sideimgcount) + 1) * sideimgcount
-            render_params["EQR_HEIGHT"] = 1540
-            render_params["FINAL_EQR_WIDTH"] = 3080
-            render_params["FINAL_EQR_HEIGHT"] = 3080
+        if quality == "2k":
+            render_params["SHARPENNING"] = 0.0
+            render_params["EQR_WIDTH"] = (int(2048 / sideimgcount) + 1) * sideimgcount
+            render_params["EQR_HEIGHT"] = 1024
+            render_params["FINAL_EQR_WIDTH"] = 2048
+            render_params["FINAL_EQR_HEIGHT"] = 2048
+            render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 31
         elif quality == "4k":
-            render_params["SHARPENNING"] = 0.25
+            render_params["SHARPENNING"] = 0.0
             render_params["EQR_WIDTH"] = (int(4096 / sideimgcount) + 1) * sideimgcount
             render_params["EQR_HEIGHT"] = 2048
             render_params["FINAL_EQR_WIDTH"] = 4096
             render_params["FINAL_EQR_HEIGHT"] = 4096
+            render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 43
         elif quality == "6k":
-            render_params["SHARPENNING"] = 0.25
+            render_params["SHARPENNING"] = 0.0
             render_params["EQR_WIDTH"] = (int(6144 / sideimgcount) + 1) * sideimgcount
             render_params["EQR_HEIGHT"] = 3072
             render_params["FINAL_EQR_WIDTH"] = 6144
             render_params["FINAL_EQR_HEIGHT"] = 6144
+            render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 53
         elif quality == "8k":
-            render_params["SHARPENNING"] = 0.25
+            render_params["SHARPENNING"] = 0.0
             render_params["EQR_WIDTH"] = (int(8192 / sideimgcount) + 1) * sideimgcount
             render_params["EQR_HEIGHT"] = 4096
             render_params["FINAL_EQR_WIDTH"] = 8192
             render_params["FINAL_EQR_HEIGHT"] = 8192
+            render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 61
         else:
             sys.stderr.write("Unrecognized quality setting: " + quality)
             exit(1)

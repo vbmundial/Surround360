@@ -113,7 +113,7 @@ def parse_args():
     parser.add_argument('--start_frame', metavar='Start Frame', help='start frame', required=False, default='0')
     parser.add_argument('--frame_count', metavar='Frame Count', help='0 = all', required=False, default='1')
     parser.add_argument('--quality', metavar='Quality', help='final output quality', required=False,
-                        choices=['3k', '4k', '6k', '8k'], default='6k')
+                        choices=['2k', '4k', '6k', '8k'], default='2k')
     parser.add_argument('--cubemap_format', metavar='Cubemap Format', help='photo or video', required=False,
                         choices=['photo', 'video'], default='photo')
     parser.add_argument('--cubemap_width', metavar='Cubemap Face Width', help='0 = no cubemaps', required=False,
@@ -222,7 +222,7 @@ if __name__ == "__main__":
     if USE_GOOEY:
         print_runall_command(args)
 
-    if quality not in ["3k", "4k", "6k", "8k"]:
+    if quality not in ["2k", "4k", "6k", "8k"]:
         sys.stderr.write("Unrecognized quality setting: " + quality)
         exit(1)
 
