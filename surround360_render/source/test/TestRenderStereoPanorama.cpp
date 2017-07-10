@@ -465,7 +465,7 @@ void poleToSideFlowThread(
 
   // crop is average of side and pole cameras
   /*float poleCameraCropRadius = 0.5f * (M_PI / 2 - sideCameraRadius) +
-      0.5f * (std::min(float(M_PI / 2), poleCameraRadius))*/;
+  0.5f * (std::min(float(M_PI / 2), poleCameraRadius))*/;
   // test: weighted average
   float weigthSide = 0.5f;
   float poleCameraCropRadius = weigthSide * (M_PI / 2 - sideCameraRadius) +
@@ -782,7 +782,7 @@ void renderStereoPanorama() {
     int sideImagesYcorner = FLAGS_eqr_height / 2 - projectionImages[0].size().height / 2;
     for (int i = 0; i < projectionImages.size(); ++i) {
       images.push_back(&projectionImages[i]);
-      corners.push_back({ i * stripWidth, sideImagesYcorner });
+      corners.push_back({ i * stripWidth - projectionImages[i].size().width / 2, sideImagesYcorner });
     }
     for (int i = 0; i < topSphericals.size(); ++i) {
       images.push_back(&topSphericals[i]);
