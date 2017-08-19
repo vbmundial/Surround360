@@ -127,7 +127,7 @@ def parse_args():
     parser.add_argument('--steps_unpack', help='Step 1: convert data in .bin files to RGB files', action='store_true',
                         required=False)
     parser.add_argument('--steps_render', help='Step 2: render stereo panoramas', action='store_true', required=False, default=True)
-    parser.add_argument('--steps_metadata', help='Step 3: copy metadata on output images', action='store_true', required=False, default=True)
+    parser.add_argument('--steps_metadata', help='Step 3: copy metadata on output images', action='store_true')
     parser.add_argument('--steps_ffmpeg', help='Step 4: create video output', action='store_true', required=False)
     parser.add_argument('--enable_top', help='Enable top camera', action='store_true')
     parser.add_argument('--enable_bottom', help='Enable bottom camera', action='store_true')
@@ -363,6 +363,7 @@ if __name__ == "__main__":
         run_step("render", render_command, verbose, dryrun, file_runtimes, num_steps)
 
     ### metadata step ###
+    if steps_metadata:
         copy_tags = [ '', 'exif:all', 'iptc:all', 'Make', 'Model', 'CodedCharacterSet', 'Lens', 'LensInfo',
                 'CountryCode', 'Country', 'State', 'City', 'Location',
                 'xmp:MetadataDate', 'photoshop:all']
