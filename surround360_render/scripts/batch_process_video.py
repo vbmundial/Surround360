@@ -48,6 +48,8 @@ RENDER_COMMAND_TEMPLATE = """
 --eqr_height {EQR_HEIGHT}
 --final_eqr_width {FINAL_EQR_WIDTH}
 --final_eqr_height {FINAL_EQR_HEIGHT}
+--pole_radius_mpl_top {POLE_RADIUS_MPL_TOP}
+--pole_radius_mpl_bottom {POLE_RADIUS_MPL_BOTTOM}
 --exposure_comp_block_size {EXPOSURE_COMP_BLOCK_SIZE}
 --interpupilary_dist {IPD}
 --side_alpha_feather_size {SIDE_ALPHA_FEATHER_SIZE}
@@ -92,6 +94,8 @@ if __name__ == "__main__":
     parser.add_argument('--enable_top', dest='enable_top', action='store_true')
     parser.add_argument('--enable_bottom', dest='enable_bottom', action='store_true')
     parser.add_argument('--enable_pole_removal', dest='enable_pole_removal', action='store_true')
+    parser.add_argument('--pole_radius_mpl_top', metavar='Pole radius multiplier top', help='Multiplier for top image compositing', default='1.0')
+    parser.add_argument('--pole_radius_mpl_bottom', metavar='Pole radius multiplier bottom', help='Multiplier for bottom image compositing', default='1.0')
     parser.add_argument('--enable_exposure_comp', help='Enable exposure compensation', action='store_true')
     parser.add_argument('--exposure_comp_block_size', help='0 = auto', default=0)
     parser.add_argument('--resume', dest='resume', action='store_true',
@@ -123,6 +127,8 @@ if __name__ == "__main__":
     enable_top = args["enable_top"]
     enable_bottom = args["enable_bottom"]
     enable_pole_removal = args["enable_pole_removal"]
+    pole_radius_mpl_top = float(args["pole_radius_mpl_top"])
+    pole_radius_mpl_bottom = float(args["pole_radius_mpl_bottom"])
     enable_exposure_comp = args["enable_exposure_comp"]
     exposure_comp_block_size = int(args["exposure_comp_block_size"])
     resume = args["resume"]
@@ -174,9 +180,11 @@ if __name__ == "__main__":
             "SIDE_FLOW_ALGORITHM": flow_alg,
             "POLAR_FLOW_ALGORITHM": flow_alg,
             "POLEREMOVAL_FLOW_ALGORITHM": flow_alg,
-            "EXTRA_FLAGS": "",
+            "POLE_RADIUS_MPL_TOP": pole_radius_mpl_top,
+            "POLE_RADIUS_MPL_BOTTOM": pole_radius_mpl_bottom,
             "EXPOSURE_COMP_BLOCK_SIZE": exposure_comp_block_size,
-            "IPD": interpupilary_dist
+            "IPD": interpupilary_dist,
+            "EXTRA_FLAGS": "",
         }
 
         if resume or not is_first_frame:

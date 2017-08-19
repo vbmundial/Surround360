@@ -55,8 +55,10 @@ DEFINE_bool(enable_top,                   false,          "is there a top camera
 DEFINE_bool(enable_bottom,                false,          "are there two bottom cameras?");
 DEFINE_bool(enable_pole_removal,          false,          "if true, pole removal masks are used; if false, primary bottom camera is used");
 DEFINE_string(bottom_pole_masks_dir,      "",             "path to bottom camera pole masks dir");
+DEFINE_double(pole_radius_mpl_top,        1.0,            "pole radius multiplier for top image compositing");
+DEFINE_double(pole_radius_mpl_bottom,     1.0,            "pole radius multiplier for bottom image compositing");
 DEFINE_bool(enable_exposure_comp,         false,          "do exposure compensation?");
-DEFINE_int32(exposure_comp_block_size,    0,             "exposure compensation block size for block-gain based correction, 0 for auto");
+DEFINE_int32(exposure_comp_block_size,    0,              "exposure compensation block size for block-gain based correction, 0 for auto");
 DEFINE_string(side_flow_alg,              "pixflow_low",  "which optical flow algorithm to use for sides");
 DEFINE_string(polar_flow_alg,             "pixflow_low",  "which optical flow algorithm to use for top/bottom warp with sides");
 DEFINE_string(poleremoval_flow_alg,       "pixflow_low",  "which optical flow algorithm to use for pole removal with secondary bottom camera");
@@ -146,7 +148,7 @@ void projectSphericalCamImages(
   projectionImages.resize(camImages.size());
   vector<std::thread> threads;
   const float hRadians = 2 * approximateFov(rig.rigSideOnly, false);
-  const float vRadians = 2 * approximateFov(rig.rigSideOnly, true);
+  const float vRadians = M_PI;
   for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
     const Camera& camera = rig.rigSideOnly[camIdx];
     projectionImages[camIdx].create(
@@ -386,6 +388,7 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
 // handles flow between the fisheye top or bottom with the left/right eye side panoramas
 void poleToSideFlowThread(
     string eyeName,
+    bool isTopPole,
     const RigDescription& rig,
     Mat* sideSphericalForEye,
     Mat* fisheyeSpherical,
@@ -458,18 +461,19 @@ void poleToSideFlowThread(
   const float kRampFrac = 1.0f; // test: fraction of available overlap used for ramp
 
   // use fov from bottom camera
-  float poleCameraRadius = rig.findCameraByDirection(-kGlobalUp).getFov();
+  float poleCameraRadius;
+  if (isTopPole) {
+    poleCameraRadius = FLAGS_pole_radius_mpl_top * rig.rigTopOnly[0].getFov();
+  } else {
+    poleCameraRadius = FLAGS_pole_radius_mpl_bottom * rig.rigBottomOnly[0].getFov();
+  }
 
   // use fov from first side camera
   float sideCameraRadius = approximateFov(rig.rigSideOnly, true);
 
   // crop is average of side and pole cameras
-  /*float poleCameraCropRadius = 0.5f * (M_PI / 2 - sideCameraRadius) +
-  0.5f * (std::min(float(M_PI / 2), poleCameraRadius))*/;
-  // test: weighted average
-  float weigthSide = 0.5f;
-  float poleCameraCropRadius = weigthSide * (M_PI / 2 - sideCameraRadius) +
-    (1.0f - weigthSide) * (std::min(float(M_PI / 2), poleCameraRadius));
+  float poleCameraCropRadius = 0.5f * (M_PI / 2 - sideCameraRadius) +
+    0.5f * (std::min(float(M_PI / 2), poleCameraRadius));
 
   // convert from radians to degrees
   poleCameraCropRadius *= 180 / M_PI;
@@ -887,6 +891,7 @@ void renderStereoPanorama() {
       std::thread topFlowThreadL(
         poleToSideFlowThread,
         "top_left" + rig.rigTopOnly[i].id,
+        true,
         cref(rig),
         &sphericalImageL,
         &topSphericals[i],
@@ -897,6 +902,7 @@ void renderStereoPanorama() {
         topFlowThreadR = std::thread(
           poleToSideFlowThread,
           "top_right" + rig.rigTopOnly[i].id,
+          true,
           cref(rig),
           &sphericalImageR,
           &topSphericals[i],
@@ -928,6 +934,7 @@ void renderStereoPanorama() {
       thread bottomFlowThreadL(
         poleToSideFlowThread, 
         "bottom_left" + rig.rigBottomOnly[i].id,
+        false,
         cref(rig),
         &flipSphericalImageL,
         &bottomSphericals[i],
@@ -939,6 +946,7 @@ void renderStereoPanorama() {
         bottomFlowThreadR = std::thread(
           poleToSideFlowThread,
           "bottom_right" + rig.rigBottomOnly[i].id,
+          false,
           cref(rig),
           &flipSphericalImageR,
           &bottomSphericals[i],
