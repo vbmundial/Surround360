@@ -577,7 +577,8 @@ void prepareBottomImagesThread(
     Mat& bottomSpherical = bottomSphericals[i];
 
     const string cameraDir = FLAGS_imgs_dir + "/" + rig.rigBottomOnly[i].id;
-    const string bottomImagePath = cameraDir + "/" + FLAGS_frame_number + ".tif";
+    const string extension = getImageFileExtension(cameraDir);
+    const string bottomImagePath = cameraDir + "/" + FLAGS_frame_number + "." + extension;
     Mat bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_UNCHANGED);
     if (FLAGS_enable_pole_removal) {
       if (bottomImage.channels() != 4) {
@@ -628,7 +629,8 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
   for (int i = 0; i < rig.rigTopOnly.size(); ++i) {
     Mat& topSpherical = topSphericals[i];
     const string cameraDir = FLAGS_imgs_dir + "/" + rig.rigTopOnly[i].id;
-    const string topImageFilename = FLAGS_frame_number + ".tif";
+    const string extension = getImageFileExtension(cameraDir);
+    const string topImageFilename = FLAGS_frame_number + "." + extension;
     const string topImagePath = cameraDir + "/" + topImageFilename;
     Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_UNCHANGED);
     const Camera& camera = rig.rigTopOnly[i];
