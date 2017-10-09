@@ -86,7 +86,7 @@ if __name__ == "__main__":
                         required=False, default='.')
     parser.add_argument('--start_frame', help='first frame index', required=True)
     parser.add_argument('--end_frame', help='last frame index', required=True)
-    parser.add_argument('--quality', help='2k,4k,6k,8k', required=True)
+    parser.add_argument('--quality', help='2k,4k,6k,8k,16k', required=True)
     parser.add_argument('--cubemap_width', help='default is to not generate cubemaps', required=False, default=0)
     parser.add_argument('--cubemap_height', help='default is to not generate cubemaps', required=False, default=0)
     parser.add_argument('--cubemap_format', help='photo,video', required=False, default='photo')
@@ -241,6 +241,14 @@ if __name__ == "__main__":
             render_params["FINAL_EQR_HEIGHT"] = 8192
             render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
             render_params["STD_ALPHA_FEATHER_SIZE"] = 61
+        elif quality == "16k":
+            render_params["SHARPENNING"] = 0.0
+            render_params["EQR_WIDTH"] = (int(16384 / sideimgcount) + 1) * sideimgcount
+            render_params["EQR_HEIGHT"] = 8192
+            render_params["FINAL_EQR_WIDTH"] = 16384
+            render_params["FINAL_EQR_HEIGHT"] = 16384
+            render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 87
         else:
             sys.stderr.write("Unrecognized quality setting: " + quality)
             exit(1)
