@@ -333,6 +333,10 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
   }
   for (std::thread& t : threads) { t.join(); }
 
+  for (int i = 0; i < projectionImages.size(); ++i) {
+    projectionImages[i].release();
+  }
+
   opticalFlowRuntime = getCurrTimeSec() - startOpticalFlowTime;
 
   // lightfield/parallax formulas
@@ -859,6 +863,10 @@ void renderStereoPanorama() {
     opticalFlowRuntime,
     novelViewRuntime);
 
+  for (Mat& projimg : projectionImages) {
+    projimg.release();
+  }
+
   if (FLAGS_save_debug_images) {
     VLOG(1) << "Offset-warping images for debugging";
     Mat wrapSphericalImageL, wrapSphericalImageR;
@@ -919,6 +927,7 @@ void renderStereoPanorama() {
         sphericalImageR =
           flattenLayersDeghostPreferBase(sphericalImageR, topSphericalWarpedR);
       }
+      topSphericals[i].release();
     }
   }
 
@@ -966,6 +975,7 @@ void renderStereoPanorama() {
         flip(flipSphericalImageR, sphericalImageR, -1);
       }
       flip(flipSphericalImageL, sphericalImageL, -1);
+      bottomSphericals[i].release();
     } 
   }
   const double topBottomToSideEndTime = getCurrTimeSec();
