@@ -87,17 +87,12 @@ float RigDescription::getRingRadius() const {
 vector<Mat> RigDescription::loadSideCameraImages(
     const string& imageDir,
     const string& frameNumber) const {
-
-  string extension;
-
-  VLOG(1) << "loadSideCameraImages spawning threads";
+    VLOG(1) << "loadSideCameraImages spawning threads";
   vector<std::thread> threads;
   vector<Mat> images(getSideCameraCount());
   for (int i = 0; i < getSideCameraCount(); ++i) {
     const string camDir = imageDir + "/" + getSideCameraId(i);
-    if (i == 0) {
-      extension = getImageFileExtension(camDir);
-    }
+    string extension = getImageFileExtension(camDir);
     const string filename = frameNumber + "." + extension;
     const string imagePath = camDir + "/" + filename;
     VLOG(1) << "imagePath = " << imagePath;
