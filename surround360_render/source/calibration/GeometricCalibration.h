@@ -8,7 +8,7 @@ Camera makeCamera(
     const Camera::Vector3& rotation,
     const Camera::Vector2& principal,
     const Camera::Real& focal,
-    const Camera::Vector2& distortion) {
+    const Camera::Vector4& distortion) {
   Camera result = camera;
   result.position = position;
   result.setRotation(rotation);
@@ -26,7 +26,7 @@ struct ReprojectionFunctor {
       Camera::Vector3& rotation,
       Camera::Vector2& principal,
       Camera::Real& focal,
-      Camera::Vector2& distortion,
+      Camera::Vector4& distortion,
       Camera::Vector3& world,
       const Camera& camera,
       const Camera::Vector2& pixel,
@@ -62,7 +62,7 @@ struct ReprojectionFunctor {
       Eigen::Map<const Camera::Vector3>(rotation),
       Eigen::Map<const Camera::Vector2>(principal),
       *focal,
-      Eigen::Map<const Camera::Vector2>(distortion));
+      Eigen::Map<const Camera::Vector4>(distortion));
     // transform world with that camera and compare to pixel
     Eigen::Map<const Camera::Vector3> w(world);
     Eigen::Map<Camera::Vector2> r(residuals);

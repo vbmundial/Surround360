@@ -27,6 +27,7 @@ struct Camera {
   using Real = double;
   using Vector2 = Eigen::Matrix<Real, 2, 1>;
   using Vector3 = Eigen::Matrix<Real, 3, 1>;
+  using Vector4 = Eigen::Matrix<Real, 4, 1>;
   using Matrix3 = Eigen::Matrix<Real, 3, 3>;
   using Ray = Eigen::ParametrizedLine<Real, 3>;
   using Rig = std::vector<Camera>;
@@ -41,7 +42,7 @@ struct Camera {
   Vector2 resolution;
 
   Vector2 principal;
-  Vector2 distortion;
+  Vector4 distortion;
   Vector2 focal;
   Real fovThreshold; // cos(fov) * abs(cos(fov))
 
@@ -171,13 +172,16 @@ struct Camera {
   Vector3 backward() const { return rotation.row(2); }
 
   // distortion is modeled in pixel space as:
-  //   distort(r) = r + d0 * r^3 + d1 * r^5
+  //   distort(r) = r + d0 * r^3 + d1 * r^5 + d2 * r^7 + d3 * r^9
   Real distort(Real r) const {
     return distortFactor(r * r) * r;
   }
 
-  Real distortFactor(Real rSquared) const {
-    return 1 + rSquared * (distortion[0] + rSquared * distortion[1]);
+  Real distortFactor(Real r2) const {
+    Real r4 = r2 * r2;
+    Real r6 = r4 * r2;
+    Real r8 = r4 * r4;
+    return 1 + r2 * distortion[0] + r4 * distortion[1] + r6 * distortion[2] + r8 * distortion[3];
   }
 
   Real undistort(Real d) const {
@@ -187,7 +191,7 @@ struct Camera {
     // solve d = distort(r) for r using newton's method
     Real r0 = d;
     const Real smidgen = 1.0 / kNearInfinity;
-    const int kMaxSteps = 10;
+    const int kMaxSteps = 50;
     for (int step = 0; step < kMaxSteps; ++step) {
       Real d0 = distort(r0);
       if (std::abs(d0 - d) < smidgen)

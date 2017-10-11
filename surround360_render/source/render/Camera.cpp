@@ -62,7 +62,7 @@ Camera::Camera(const json::Value &json)
     principal = resolution / 2;
   
   if (json.HasKey("distortion"))
-    distortion = deserializeVector<2>(json["distortion"]);
+    distortion = deserializeVector<4>(json["distortion"]);
   else
     distortion.setZero();
 
@@ -381,6 +381,8 @@ void Camera::unitTest()
     // check that undistort undoes distort
     camera.distortion[0] = 0.20;
     camera.distortion[1] = 0.02;
+    camera.distortion[2] = 0;
+    camera.distortion[3] = 0;
     Real expected = 3;
     Real distorted = camera.distort(expected);
     Real undistorted = camera.undistort(distorted);

@@ -813,7 +813,7 @@ void refine(
   std::vector<Camera::Vector3> rotations;
   std::vector<Camera::Vector2> principals;
   std::vector<Camera::Real> focals;
-  std::vector<Camera::Vector2> distortions;
+  std::vector<Camera::Vector4> distortions;
   for (auto& camera : cameras) {
     positions.push_back(camera.position);
     rotations.push_back(camera.getRotation());
