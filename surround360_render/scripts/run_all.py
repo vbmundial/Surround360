@@ -81,7 +81,9 @@ RENDER_COMMAND_TEMPLATE = """
 --pole_radius_mpl_top {POLE_RADIUS_MPL_TOP}
 --pole_radius_mpl_bottom {POLE_RADIUS_MPL_BOTTOM}
 --exposure_comp_block_size {EXPOSURE_COMP_BLOCK_SIZE}
+--ground_distortion_height {GROUND_DISTORTION_HEIGHT}
 --interpupilary_dist {IPD}
+--zero_parallax_dist {ZERO_PARALLAX_DIST}
 {FLAGS_RENDER_EXTRA}
 """
 
@@ -136,9 +138,12 @@ def parse_args():
     parser.add_argument('--pole_radius_mpl_bottom', metavar='Pole radius multiplier bottom', help='Multiplier for bottom image compositing', default='1.0')
     parser.add_argument('--enable_exposure_comp', help='Enable exposure compensation', action='store_true')
     parser.add_argument('--exposure_comp_block_size', metavar='Exposure compensation block size', help='0 = auto', default='0')
+    parser.add_argument('--enable_ground_distortion', help='Enable ground distortion compensation', action='store_true')
+    parser.add_argument('--ground_distortion_height', metavar='Ground height', help='Camera distance to floor for distortion', default='170.0')
     parser.add_argument('--dryrun', help='Do not execute steps', action='store_true')
     parser.add_argument('--verbose', help='Increase output verbosity', action='store_true')
     parser.add_argument('--interpupilary_dist', metavar='IPD', help='interpupilary distance', default='6.4')
+    parser.add_argument('--zero_parallax_dist', metavar='Zero parallax distance', help='zero parallax distance', default='10000.0')
 
     return vars(parser.parse_args())
 
@@ -210,10 +215,13 @@ if __name__ == "__main__":
     pole_radius_mpl_bottom = float(args["pole_radius_mpl_bottom"])
     enable_exposure_comp = args["enable_exposure_comp"]
     exposure_comp_block_size = int(args["exposure_comp_block_size"])
+    enable_ground_distortion = args["enable_ground_distortion"]
+    ground_distortion_height = float(args["ground_distortion_height"])
     save_debug_images = args["save_debug_images"]
     save_raw = args["save_raw"]
     dryrun = args["dryrun"]
     interpupilary_dist = float(args["interpupilary_dist"])
+    zero_parallax_dist = float(args["zero_parallax_dist"])
     steps_unpack = args["steps_unpack"]
     steps_render = args["steps_render"]
     steps_metadata = args["steps_metadata"]
@@ -332,9 +340,12 @@ if __name__ == "__main__":
 
             if enable_pole_removal:
                 render_extra_params += " --enable_pole_removal"
-        
+       
         if enable_exposure_comp:
             render_extra_params += " --enable_exposure_comp"
+
+        if enable_ground_distortion:
+            render_extra_params += " --enable_ground_distortion"
 
         if save_debug_images:
             render_extra_params += " --save_debug_images"
@@ -356,7 +367,9 @@ if __name__ == "__main__":
             "POLE_RADIUS_MPL_TOP": pole_radius_mpl_top,
             "POLE_RADIUS_MPL_BOTTOM": pole_radius_mpl_bottom,
             "EXPOSURE_COMP_BLOCK_SIZE": exposure_comp_block_size,
+            "GROUND_DISTORTION_HEIGHT": ground_distortion_height,
             "IPD": interpupilary_dist,
+            "ZERO_PARALLAX_DIST": zero_parallax_dist,
             "FLAGS_RENDER_EXTRA": render_extra_params,
         }
         render_command = RENDER_COMMAND_TEMPLATE.replace("\n", " ").format(**render_params)

@@ -63,7 +63,11 @@ void bicubicRemapToSpherical(
   const float leftAngle,
   const float rightAngle,
   const float topAngle,
-  const float bottomAngle);
+  const float bottomAngle,
+  const bool enableGroundDistortion,
+  const float groundDistortionHeight,
+  const float zeroParallaxDist,
+  const float interpupillaryDist);
 
 Camera::Vector2 projectEquirectToCam(
   const float srcTheta,

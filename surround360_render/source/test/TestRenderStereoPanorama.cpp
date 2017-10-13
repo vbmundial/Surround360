@@ -59,10 +59,12 @@ DEFINE_double(pole_radius_mpl_top,        1.0,            "pole radius multiplie
 DEFINE_double(pole_radius_mpl_bottom,     1.0,            "pole radius multiplier for bottom image compositing");
 DEFINE_bool(enable_exposure_comp,         false,          "do exposure compensation?");
 DEFINE_int32(exposure_comp_block_size,    0,              "exposure compensation block size for block-gain based correction, 0 for auto");
+DEFINE_bool(enable_ground_distortion,     false,          "compensate for distortion caused by the inevitable proximity of the floor");
+DEFINE_double(ground_distortion_height,   170,            "camera distance to floor in cm");
 DEFINE_string(side_flow_alg,              "pixflow_low",  "which optical flow algorithm to use for sides");
 DEFINE_string(polar_flow_alg,             "pixflow_low",  "which optical flow algorithm to use for top/bottom warp with sides");
 DEFINE_string(poleremoval_flow_alg,       "pixflow_low",  "which optical flow algorithm to use for pole removal with secondary bottom camera");
-DEFINE_double(zero_parallax_dist,         10000.0,        "distance where parallax is zero");
+DEFINE_double(zero_parallax_dist,         10000.0,        "distance where parallax is zero - sets radius of projection sphere when rendering mono with ground correction");
 DEFINE_int32(eqr_width,                   256,            "width of spherical projection image (0 to 2pi)");
 DEFINE_int32(eqr_height,                  128,            "height of spherical projection image (0 to pi)");
 DEFINE_int32(final_eqr_width,             3480,           "resize before stacking stereo equirect width");
@@ -126,7 +128,11 @@ void projectSideToSpherical(
     leftAngle,
     rightAngle,
     topAngle,
-    bottomAngle);
+    bottomAngle,
+    FLAGS_enable_ground_distortion,
+    FLAGS_ground_distortion_height, 
+    FLAGS_zero_parallax_dist,
+    FLAGS_interpupilary_dist);
 }
 
 // project all of the (side) cameras' images into spherical coordinates
@@ -606,7 +612,11 @@ void prepareBottomImagesThread(
       0,
       2.0f * M_PI,
       -(M_PI / 2.0f),
-      -(M_PI / 2.0f - camera.getFov()));
+      -(M_PI / 2.0f - camera.getFov()),
+      FLAGS_enable_ground_distortion,
+      FLAGS_ground_distortion_height,
+      FLAGS_zero_parallax_dist,
+      FLAGS_interpupilary_dist);
 
     // Remove upper half of projected image (it is flipped, so lower half)
     Size size = bottomSpherical.size();
@@ -649,7 +659,11 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
       2.0f * M_PI,
       0,
       M_PI / 2.0f,
-      M_PI / 2.0f - camera.getFov());
+      M_PI / 2.0f - camera.getFov(),
+      FLAGS_enable_ground_distortion,
+      FLAGS_ground_distortion_height,
+      FLAGS_zero_parallax_dist,
+      FLAGS_interpupilary_dist);
 
     // alpha feather the top spherical image for flow purposes
     if (topSpherical.type() != CV_8UC4) {
@@ -867,6 +881,46 @@ void renderStereoPanorama() {
     projimg.release();
   }
 
+  // so far we only operated on the strip that contains the full vertical FOV of
+  // the side cameras. before merging those results with top/bottom cameras,
+  // we will pad the side images out to be a full 180 degree vertical equirect.
+  padToheight(sphericalImageL, FLAGS_eqr_height);
+  if (FLAGS_interpupilary_dist != 0)
+      padToheight(sphericalImageR, FLAGS_eqr_height);
+
+  // Ground correction in stereo mode.
+  // Done differently than in mono (bicubicRemapToSpherical) which would ruin the
+  // the necessary parallax. Only the bottom images are projected to the floor,
+  // side photos are mapped enterily to a sphere with a radius of kNearInfinity.
+  // After the novel views are generated and merged, lines below the horizon are 
+  // 'pushed' upwards as if a floor was present.
+  if (FLAGS_enable_ground_distortion && FLAGS_interpupilary_dist != 0) {
+    float h = FLAGS_ground_distortion_height;
+    float r = rig.getRingRadius();
+    Mat map(sphericalImageL.size(), CV_32FC2);
+    float imgheight = map.size().height;
+
+    for (int x = 0; x < map.cols; ++x) {
+      for (int y = 0; y < map.rows; ++y) {
+        float u = x;
+        float v = y;
+        if (y > map.rows / 2) {
+            //below the horizon
+            float alpha = (y - imgheight / 2.0f) * M_PI / imgheight;
+            float d = h / tan(alpha) - r;
+            float theta = atan(h / d);
+            v = (theta / M_PI  * imgheight) + imgheight / 2.0f;
+          }
+          map.at<Point2f>(y, x) = { u, v };
+      }
+    }
+    Mat src = sphericalImageL.clone();
+    remap(src, sphericalImageL, map, Mat(), CV_INTER_CUBIC);
+    src = sphericalImageR.clone();
+    remap(src, sphericalImageR, map, Mat(), CV_INTER_CUBIC);
+    map.release();
+  }
+
   if (FLAGS_save_debug_images) {
     VLOG(1) << "Offset-warping images for debugging";
     Mat wrapSphericalImageL, wrapSphericalImageR;
@@ -880,13 +934,6 @@ void renderStereoPanorama() {
     if (FLAGS_interpupilary_dist != 0)
       imwriteExceptionOnFail(debugDir + "/sphericalImg_offsetwrapR.tif", wrapSphericalImageR);
   }
-
-  // so far we only operated on the strip that contains the full vertical FOV of
-  // the side cameras. before merging those results with top/bottom cameras,
-  // we will pad the side images out to be a full 180 degree vertical equirect.
-  padToheight(sphericalImageL, FLAGS_eqr_height);
-  if (FLAGS_interpupilary_dist != 0)
-    padToheight(sphericalImageR, FLAGS_eqr_height);
 
   const double topBottomToSideStartTime = getCurrTimeSec();
   

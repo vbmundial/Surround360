@@ -140,6 +140,13 @@ vector<Mat> convertSphericalToCubemapBicubicRemap(
   return faceImages;
 }
 
+// Ground correction for mono mode:
+// Projecting on a ground plane, instead of a sphere when the plane is closer.
+// The infinitely large sphere is replaced by one with a smaller radius, 
+// which can be closer to the typical distance of objects present on the pano.
+// This reduces the sharp transition of floor-to-sphere, and also
+// significantly lowers the parallax (though it is needed in stereo rendering).
+// In stereo mode the plane is only used in bottom camera rendering.
 void bicubicRemapToSpherical(
     Mat& dst,
     const Mat& src,
@@ -147,7 +154,11 @@ void bicubicRemapToSpherical(
     const float leftAngle,
     const float rightAngle,
     const float topAngle,
-    const float bottomAngle) {
+    const float bottomAngle,
+    const bool enableGroundDistortion,
+    const float groundDistortionHeight,
+    const float zeroParallaxDist,
+    const float interpupilaryDist) {
   Mat warp(dst.size(), CV_32FC2);
   for (int x = 0; x < warp.cols; ++x) {
     // sweep xAngle from leftAngle to rightAngle
@@ -161,8 +172,22 @@ void bicubicRemapToSpherical(
         cos(yAngle) * cos(xAngle),
         cos(yAngle) * sin(xAngle),
         sin(yAngle));
-      const Camera::Vector2 pixel =
-        camera.pixel(unit * int(Camera::kNearInfinity));
+      
+      Camera::Vector3 point = Camera::kNearInfinity * unit; // in rig space
+      if (enableGroundDistortion) {
+        float radius = (interpupilaryDist == 0) ? zeroParallaxDist : Camera::kNearInfinity;
+        point = radius * unit;
+        if (interpupilaryDist == 0 || camera.group == "bottom camera") { 
+          Camera::Vector3 n(0, 0, 1);
+          Camera::Vector3 p0(0, 0, -groundDistortionHeight);
+          float planeDist = p0.dot(n) / unit.dot(n);
+          if (planeDist > 0 && planeDist < radius) {
+            point = planeDist * unit;
+          }
+        }
+      }
+
+      const Camera::Vector2 pixel = camera.pixel(point);
       warp.at<Point2f>(y, x) = Point2f(pixel.x() - 0.5, pixel.y() - 0.5);
     }
   }
