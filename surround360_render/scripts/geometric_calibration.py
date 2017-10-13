@@ -34,13 +34,13 @@ TITLE = "Surround 360 - Geometric Calibration"
 
 COLMAP_EXTRACT_TEMPLATE = """
 {COLMAP_DIR}/feature_extractor
---General.image_path {IMAGE_PATH}
---General.database_path {COLMAP_DB_PATH}
+--image_path {IMAGE_PATH}
+--database_path {COLMAP_DB_PATH}
 """
 
 COLMAP_MATCH_TEMPLATE = """
 {COLMAP_DIR}/exhaustive_matcher
---General.database_path {COLMAP_DB_PATH}
+--database_path {COLMAP_DB_PATH}
 """
 
 GEOMETRIC_CALIBRATION_COMMAND_TEMPLATE = """
@@ -127,7 +127,7 @@ def start_subprocess(name, cmd):
 
 
 def print_and_save(file_out, str):
-    print str
+    print(str)
     file_out.write(str)
     sys.stdout.flush()
 
@@ -135,7 +135,7 @@ def print_and_save(file_out, str):
 def save_step_runtime(file_out, step, runtime_sec):
     text_runtime = "\n" + step + " runtime: " + str(datetime.timedelta(seconds=runtime_sec)) + "\n"
     file_out.write(text_runtime)
-    print text_runtime
+    print(text_runtime)
     sys.stdout.flush()
 
 
@@ -171,23 +171,23 @@ if __name__ == "__main__":
     pass_count = args["pass_count"]
     save_debug_images = args["save_debug_images"]
 
-    print "\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n"
+    print("\n--------" + time.strftime(" %a %b %d %Y %H:%M:%S %Z ") + "-------\n")
 
     # Open file (unbuffered)
-    file_runtimes = open(data_dir + "/runtimes.txt", 'w', 0)
+    file_runtimes = open(data_dir + "/runtimes.txt", 'w')
 
     start_time = timer()
 
     if 'cv2' in sys.modules:
-        print "Converting images to 8-bit..."
+        print("Converting images to 8-bit...")
         for filename in list_only_files_recursive(data_dir):
             image = cv2.imread(filename, cv2.IMREAD_UNCHANGED)
             if image is not None and image.dtype == np.uint16:
-                print filename + "..."
+                print(filename + "...")
                 image = (255.0 / (2 ** 16 - 1) * image).astype(np.uint8)
                 cv2.imwrite(filename, image)
 
-    print "Extracting features via COLMAP..."
+    print("Extracting features via COLMAP...")
     colmap_db_path = data_dir + "/colmap.db"
     """
     feature_extraction_params = {
@@ -204,7 +204,7 @@ if __name__ == "__main__":
     feature_extraction_command = COLMAP_EXTRACT_TEMPLATE.replace("\n", " ").format(**feature_extraction_params)
     run_step("feature extraction", feature_extraction_command, file_runtimes)
 
-    print "Matching features via COLMAP..."
+    print("Matching features via COLMAP...")
 
     """
     feature_matching_params = {
@@ -219,7 +219,7 @@ if __name__ == "__main__":
     feature_matching_command = COLMAP_MATCH_TEMPLATE.replace("\n", " ").format(**feature_matching_params)
     run_step("feature matching", feature_matching_command, file_runtimes)
 
-    print "Converting database to JSON file..."
+    print("Converting database to JSON file...")
     matches_json = data_dir + "/matches.json"
     features_db_to_json(colmap_db_path, matches_json)
 
@@ -232,7 +232,7 @@ if __name__ == "__main__":
 
     os.chdir(data_dir)
 
-    print "Running geometric calibration..."
+    print("Running geometric calibration...")
     flags_extra = ""
     if save_debug_images:
         flags_extra += " --debug_matches_overlap 0.2 --save_debug_images"
