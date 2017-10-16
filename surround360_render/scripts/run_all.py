@@ -406,48 +406,68 @@ if __name__ == "__main__":
                 print(copy_command)
             start_subprocess("metadata_copy", copy_command)
 
-            if interpupilary_dist > 0:
-                continue
-            
+            if interpupilary_dist == 0:     
             # add gpano tags
-            gpano_constant_tags = {
-                'UsePanoramaViewer' : 'True',
-                'StitchingSoftware' : '"Facebook Surround 360"',
-                'ProjectionType' : '"equirectangular"',
-                'SourcePhotosCount' : str(camera_count),
-                'CroppedAreaTopPixels' : str(0),
-                'CroppedAreaLeftPixels' : str(0)
-            }
-            gpano_constant_tags_param = ' '.join(map(lambda t: '-xmp-GPano:' + t[0] + '=' + t[1], gpano_constant_tags.items()))
-            gpano_constants_params = {'TAGS': gpano_constant_tags_param, 'TARGET_FILE': target_file}
-            gpano_constants_command = 'exiftool {TAGS} {TARGET_FILE} -overwrite_original'.format(**gpano_constants_params)
-            if verbose:
-                print(gpano_constants_command)
-            start_subprocess("metadata_gpano_constants", gpano_constants_command)
+                gpano_constant_tags = {
+                    'UsePanoramaViewer': 'True',
+                    'StitchingSoftware': '"Facebook Surround 360"',
+                    'ProjectionType': '"equirectangular"',
+                    'SourcePhotosCount': str(camera_count),
+                    'CroppedAreaTopPixels': str(0),
+                    'CroppedAreaLeftPixels': str(0)
+                }
+                gpano_constant_tags_param = ' '.join(map(lambda t: '-xmp-GPano:' + t[0] + '=' + t[1], gpano_constant_tags.items()))
+                gpano_constants_params = {'TAGS': gpano_constant_tags_param, 'TARGET_FILE': target_file}
+                gpano_constants_command = 'exiftool {TAGS} {TARGET_FILE} -overwrite_original'.format(**gpano_constants_params)
+                if verbose:
+                    print(gpano_constants_command)
+                start_subprocess("metadata_gpano_constants", gpano_constants_command)
 
-            gpano_firstdate_params = {'FIRST_FILE': first_file, 'TARGET_FILE': target_file}
-            gpano_firstdate_command = 'exiftool -TagsFromFile {FIRST_FILE} "-xmp-GPano:FirstPhotoDate<DateTimeOriginal"' \
-                                    ' {TARGET_FILE} -overwrite_original'.format(**gpano_firstdate_params)
-            if verbose:
-                print(gpano_firstdate_command)
-            start_subprocess("metadata_gpano_firstdate", gpano_firstdate_command)
+                gpano_firstdate_params = {'FIRST_FILE': first_file, 'TARGET_FILE': target_file}
+                gpano_firstdate_command = 'exiftool -TagsFromFile {FIRST_FILE} "-xmp-GPano:FirstPhotoDate<DateTimeOriginal"' \
+                                        ' {TARGET_FILE} -overwrite_original'.format(**gpano_firstdate_params)
+                if verbose:
+                    print(gpano_firstdate_command)
+                start_subprocess("metadata_gpano_firstdate", gpano_firstdate_command)
 
-            gpano_lastdate_params = {'LAST_FILE': last_file, 'TARGET_FILE': target_file}
-            gpano_lastdate_command = 'exiftool -TagsFromFile {LAST_FILE} "-xmp-GPano:LastPhotoDate<DateTimeOriginal"' \
-                                    ' {TARGET_FILE} -overwrite_original'.format(**gpano_lastdate_params)
-            if verbose:
-                print(gpano_lastdate_command)
-            start_subprocess("metadata_gpano_lastdate", gpano_lastdate_command)
+                gpano_lastdate_params = {'LAST_FILE': last_file, 'TARGET_FILE': target_file}
+                gpano_lastdate_command = 'exiftool -TagsFromFile {LAST_FILE} "-xmp-GPano:LastPhotoDate<DateTimeOriginal"' \
+                                        ' {TARGET_FILE} -overwrite_original'.format(**gpano_lastdate_params)
+                if verbose:
+                    print(gpano_lastdate_command)
+                start_subprocess("metadata_gpano_lastdate", gpano_lastdate_command)
 
-            gpano_dimensions_command = 'exiftool '\
-                                    '-"CroppedAreaImageWidthPixels<$ImageWidth" '\
-                                    '-"CroppedAreaImageHeightPixels<$ImageHeight" '\
-                                    '-"FullPanoWidthPixels<$ImageWidth" '\
-                                    '-"FullPanoHeightPixels<$ImageHeight" '\
-                                    ' {} -overwrite_original'.format(target_file)
+                gpano_dimensions_command = 'exiftool '\
+                                        '-"CroppedAreaImageWidthPixels<$ImageWidth" '\
+                                        '-"CroppedAreaImageHeightPixels<$ImageHeight" '\
+                                        '-"FullPanoWidthPixels<$ImageWidth" '\
+                                        '-"FullPanoHeightPixels<$ImageHeight" '\
+                                        f' {target_file} -overwrite_original'
+                if verbose:
+                    print(gpano_dimensions_command)
+                start_subprocess("metadata_gpano_dimensions", gpano_dimensions_command)
+
+            comment_parts = []
+            comment_parts.append('Facebook Surround 360')
+            if enable_top:
+                comment_parts.append(f'Pole top = {pole_radius_mpl_top}x')
+            if enable_bottom:
+                comment_parts.append(f'Pole bottom = {pole_radius_mpl_bottom}x')
+            if enable_exposure_comp:
+                sizetext = 'auto' if exposure_comp_block_size == 0 else exposure_comp_block_size
+                comment_parts.append(f'Exposure compensation block size = {sizetext}')
+            if enable_ground_distortion:
+                comment_parts.append(f'Ground distortion height = {round(ground_distortion_height)}cm')
+                comment_parts.append(f'ZPD = {round(zero_parallax_dist / 100)}m')
+            if interpupilary_dist != 0:
+                comment_parts.append(f'IPD = {interpupilary_dist}cm')
+            
+            comment = ' | '.join(comment_parts)
+            comment_command = f'exiftool -UserComment="{comment}" {target_file} -overwrite_original'
             if verbose:
-                print(gpano_dimensions_command)
-            start_subprocess("metadata_gpano_dimensions", gpano_dimensions_command)
+                    print(comment_command)
+            start_subprocess("metadata_comment", comment_command)
+                         
 
     ### ffmpeg step ###
 
