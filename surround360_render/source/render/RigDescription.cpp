@@ -86,9 +86,10 @@ float RigDescription::getRingRadius() const {
 
 vector<Mat> RigDescription::loadSideCameraImages(
     const string& imageDir,
-    const string& frameNumber) const {
+    const string& frameNumber, 
+    int threadLimit) const {
     VLOG(1) << "loadSideCameraImages spawning threads";
-  vector<std::thread> threads;
+  deque<std::thread> threads;
   vector<Mat> images(getSideCameraCount());
   for (int i = 0; i < getSideCameraCount(); ++i) {
     const string camDir = imageDir + "/" + getSideCameraId(i);
@@ -96,6 +97,10 @@ vector<Mat> RigDescription::loadSideCameraImages(
     const string filename = frameNumber + "." + extension;
     const string imagePath = camDir + "/" + filename;
     VLOG(1) << "imagePath = " << imagePath;
+    if (threads.size() >= threadLimit) {
+      threads.front().join();
+      threads.pop_front();
+    }
     threads.emplace_back(
       imreadInStdThread,
       imagePath,
@@ -107,6 +112,20 @@ vector<Mat> RigDescription::loadSideCameraImages(
   }
 
   return images;
+}
+
+Mat RigDescription::loadSideCameraImage(
+    int cameraIdx,
+    const string& imageDir,
+    const string& frameNumber) const {
+    VLOG(1) << "loadSideCameraImage";
+
+    const string camDir = imageDir + "/" + getSideCameraId(cameraIdx);
+    string extension = getImageFileExtension(camDir);
+    const string filename = frameNumber + "." + extension;
+    const string imagePath = camDir + "/" + filename;
+    VLOG(1) << "imagePath = " << imagePath;
+    return imread(imagePath, CV_LOAD_IMAGE_UNCHANGED);
 }
 
 } // namespace surround360

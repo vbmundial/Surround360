@@ -46,6 +46,7 @@ DEFINE_string(output_data_dir,            "",             "path to write spheric
 DEFINE_string(prev_frame_data_dir,        "NONE",         "path to data for previous frame; used for temporal regularization");
 DEFINE_string(output_cubemap_path,        "",             "path to write output oculus 360 cubemap");
 DEFINE_string(output_equirect_path,       "",             "path to write output oculus 360 cubemap");
+DEFINE_int32(thread_limit,                7,              "max. number of threads running in parallel when processing side images.");
 DEFINE_double(interpupilary_dist,         6.4,            "separation of eyes for stereo, spherical_in whatever units the rig json uses.");
 DEFINE_int32(side_alpha_feather_size,     101,            "alpha feather for projection of side cameras to spherical coordinates");
 DEFINE_int32(std_alpha_feather_size,      31,             "alpha feather for all other purposes. must be odd");
@@ -144,29 +145,37 @@ void projectSphericalCamImages(
 
   VLOG(1) << "Projecting side camera images to spherical coordinates";
 
-  const double startLoadCameraImagesTime = getCurrTimeSec();
-  vector<Mat> camImages = rig.loadSideCameraImages(imagesDir, frameNumber);
-  const double endLoadCameraImagesTime = getCurrTimeSec();
-  VLOG(1) << "Time to load images from file: "
-    << endLoadCameraImagesTime - startLoadCameraImagesTime
-    << " sec";
-
-  projectionImages.resize(camImages.size());
-  vector<std::thread> threads;
+  bool lowMemMode = true;
+  vector<Mat> camImages;
+  projectionImages.resize(rig.getSideCameraCount());
+  if (!lowMemMode) {
+    const double startLoadCameraImagesTime = getCurrTimeSec();
+    camImages = rig.loadSideCameraImages(imagesDir, frameNumber, FLAGS_thread_limit);
+    const double endLoadCameraImagesTime = getCurrTimeSec();
+    VLOG(1) << "Time to load images from file: "
+      << endLoadCameraImagesTime - startLoadCameraImagesTime
+      << " sec";
+  }
+  deque<std::thread> threads;
   const float hRadians = 2 * approximateFov(rig.rigSideOnly, false);
   const float vRadians = M_PI;
-  for (int camIdx = 0; camIdx < camImages.size(); ++camIdx) {
+  for (int camIdx = 0; camIdx < rig.getSideCameraCount(); ++camIdx) {
     const Camera& camera = rig.rigSideOnly[camIdx];
     projectionImages[camIdx].create(
       FLAGS_eqr_height * vRadians / M_PI,
       FLAGS_eqr_width * hRadians / (2 * M_PI),
       CV_8UC4);
     // the negative sign here is so the camera array goes clockwise
-    float direction = -float(camIdx) / float(camImages.size()) * 2.0f * M_PI;
+    float direction = -float(camIdx) / float(rig.getSideCameraCount()) * 2.0f * M_PI;
+    if (threads.size() >= FLAGS_thread_limit) {
+      threads.front().join();
+      threads.pop_front();
+    }
+    Mat camImage = lowMemMode ? rig.loadSideCameraImage(camIdx, imagesDir, frameNumber) : camImages[camIdx];
     threads.emplace_back(
       projectSideToSpherical,
       ref(projectionImages[camIdx]),
-      cref(camImages[camIdx]),
+      camImage,
       cref(camera),
       direction + hRadians / 2,
       direction - hRadians / 2,
@@ -293,21 +302,60 @@ void renderStereoPanoramaChunksThread(
   pair<Mat, Mat> lazyNovelChunksLR =
     novelViewGen->combineLazyNovelViews(lazyNovelViewBuffer);
   *chunkL = lazyNovelChunksLR.first;
-  *chunkR = lazyNovelChunksLR.second;
+  if (FLAGS_interpupilary_dist != 0)
+    *chunkR = lazyNovelChunksLR.second;
+}
+
+void prepareNovelViewGeneratorAndRenderStereoPanoramaChunksThread(
+    const int overlapImageWidth,
+    const int leftIdx, // only used to determine debug image filename
+    Mat imageL,
+    Mat imageR,
+    //NovelViewGenerator* novelViewGen,
+    //const int leftIdx, // left camera
+    const int numCams,
+    const int camImageWidth,
+    const int camImageHeight,
+    const int numNovelViews,
+    const float fovHorizontalRadians,
+    const float vergeAtInfinitySlabDisplacement,
+    //NovelViewGenerator* novelViewGen,
+    Mat* chunkL,
+    Mat* chunkR) {
+  NovelViewGeneratorAsymmetricFlow nvg(FLAGS_side_flow_alg);
+  prepareNovelViewGeneratorThread(
+    overlapImageWidth,
+    leftIdx,
+    &imageL,
+    &imageR,
+    &nvg);
+
+  renderStereoPanoramaChunksThread(
+    leftIdx,
+    numCams,
+    camImageWidth,
+    camImageHeight,
+    numNovelViews,
+    fovHorizontalRadians,
+    vergeAtInfinitySlabDisplacement,
+    &nvg,
+    chunkL,
+    chunkR);
 }
 
 // generates a left/right eye equirect panorama using slices of novel views
 void generateRingOfNovelViewsAndRenderStereoSpherical(
     const float cameraRingRadius,
     const float camFovHorizontalDegrees,
-    vector<Mat>& projectionImages,
+    vector<Mat> projectionImages,
     Mat& panoImageL,
     Mat& panoImageR,
     double& opticalFlowRuntime,
     double& novelViewRuntime) {
 
+  double startTime = getCurrTimeSec();
   const int numCams = projectionImages.size();
-
+  vector<Mat> projectionImagesRefcopy = projectionImages;
   // this is the amount of horizontal overlap the cameras would have if they
   // were all perfectly aligned (in fact due to misalignment they overlap by a
   // different amount for each pair, but we ignore that to make it simple)
@@ -320,31 +368,6 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
     float(camImageWidth) * (overlapAngleDegrees / camFovHorizontalDegrees);
   const int numNovelViews = camImageWidth - overlapImageWidth; // per image pair
 
-  // setup parallel optical flow
-  double startOpticalFlowTime = getCurrTimeSec();
-  vector<NovelViewGenerator*> novelViewGenerators(projectionImages.size());
-  vector<std::thread> threads;
-  for (int leftIdx = 0; leftIdx < projectionImages.size(); ++leftIdx) {
-    const int rightIdx = (leftIdx + 1) % projectionImages.size();
-    novelViewGenerators[leftIdx] =
-      new NovelViewGeneratorAsymmetricFlow(FLAGS_side_flow_alg);
-    threads.push_back(std::thread(
-      prepareNovelViewGeneratorThread,
-      overlapImageWidth,
-      leftIdx,
-      &projectionImages[leftIdx],
-      &projectionImages[rightIdx],
-      novelViewGenerators[leftIdx]
-    ));
-  }
-  for (std::thread& t : threads) { t.join(); }
-
-  for (int i = 0; i < projectionImages.size(); ++i) {
-    projectionImages[i].release();
-  }
-
-  opticalFlowRuntime = getCurrTimeSec() - startOpticalFlowTime;
-
   // lightfield/parallax formulas
   const float v =
     atanf(FLAGS_zero_parallax_dist / (FLAGS_interpupilary_dist / 2.0f));
@@ -356,35 +379,39 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
   const float zeroParallaxNovelViewShiftPixels =
     float(FLAGS_eqr_width) * (theta / (2.0f * M_PI));
 
-  double startNovelViewTime = getCurrTimeSec();
+  // setup parallel optical flow
+  deque<std::thread> threads;
+
   // a "chunk" will be just the part of the panorama formed from one pair of
   // adjacent cameras. we will stack them horizontally to build the full
   // panorama. we do this so it can be parallelized.
   vector<Mat> panoChunksL(projectionImages.size(), Mat());
   vector<Mat> panoChunksR(projectionImages.size(), Mat());
-  vector<std::thread> panoThreads;
+
   for (int leftIdx = 0; leftIdx < projectionImages.size(); ++leftIdx) {
-    panoThreads.push_back(std::thread(
-      renderStereoPanoramaChunksThread,
+    const int rightIdx = (leftIdx + 1) % projectionImages.size();
+    if (threads.size() >= FLAGS_thread_limit) {
+      threads.front().join();
+      threads.pop_front();
+    }
+    threads.push_back(std::thread(
+      prepareNovelViewGeneratorAndRenderStereoPanoramaChunksThread,
+      overlapImageWidth,
       leftIdx,
+      std::move(projectionImages[leftIdx]),
+      std::move(projectionImagesRefcopy[rightIdx]),
+
       numCams,
       camImageWidth,
       camImageHeight,
       numNovelViews,
       fovHorizontalRadians,
       vergeAtInfinitySlabDisplacement,
-      novelViewGenerators[leftIdx],
       &panoChunksL[leftIdx],
       &panoChunksR[leftIdx]
     ));
   }
-  for (std::thread& t : panoThreads) { t.join(); }
-
-  novelViewRuntime = getCurrTimeSec() - startNovelViewTime;
-
-  for (int leftIdx = 0; leftIdx < projectionImages.size(); ++leftIdx) {
-    delete novelViewGenerators[leftIdx];
-  }
+  for (std::thread& t : threads) { t.join(); }
 
   panoImageL = stackHorizontal(panoChunksL);
   if (FLAGS_interpupilary_dist != 0)
@@ -393,6 +420,10 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
   panoImageL = offsetHorizontalWrap(panoImageL, zeroParallaxNovelViewShiftPixels);
   if (FLAGS_interpupilary_dist != 0)
     panoImageR = offsetHorizontalWrap(panoImageR, -zeroParallaxNovelViewShiftPixels);
+
+  double time = getCurrTimeSec() - startTime;
+  opticalFlowRuntime = time / 2.;
+  novelViewRuntime = time / 2.;
 }
 
 // handles flow between the fisheye top or bottom with the left/right eye side panoramas
@@ -871,15 +902,11 @@ void renderStereoPanorama() {
   generateRingOfNovelViewsAndRenderStereoSpherical(
     rig.getRingRadius(),
     fovHorizontal,
-    projectionImages,
+    std::move(projectionImages),
     sphericalImageL,
     sphericalImageR,
     opticalFlowRuntime,
     novelViewRuntime);
-
-  for (Mat& projimg : projectionImages) {
-    projimg.release();
-  }
 
   // so far we only operated on the strip that contains the full vertical FOV of
   // the side cameras. before merging those results with top/bottom cameras,

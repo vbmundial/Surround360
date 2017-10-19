@@ -34,7 +34,6 @@ struct RigDescription {
   const Camera& findCameraByDirection(
     const Camera::Vector3& direction,
     const Camera::Real distCamAxisToRigCenterMax = 50.0) const;
-    // !!! Blaise: modify from 1.0
 
   // find the camera with the largest distance from camera axis to rig center
   const Camera& findLargestDistCamAxisToRigCenter() const;
@@ -53,7 +52,13 @@ struct RigDescription {
 
   vector<Mat> loadSideCameraImages(
     const string& imageDir,
-    const string& frameNumber) const;
+    const string& frameNumber,
+    int threadLimit) const;
+
+  Mat loadSideCameraImage(
+      int cameraIdx,
+      const string& imageDir,
+      const string& frameNumber) const;
 
 private:
   static Camera::Real distCamAxisToRigCenter(const Camera& camera) {
