@@ -228,7 +228,7 @@ if __name__ == "__main__":
             render_params["FINAL_EQR_WIDTH"] = 2048
             render_params["FINAL_EQR_HEIGHT"] = 2048
             render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
-            render_params["STD_ALPHA_FEATHER_SIZE"] = 31
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 21
         elif quality == "4k":
             render_params["SHARPENNING"] = 0.0
             render_params["EQR_WIDTH"] = (int(4096 / sideimgcount) + 1) * sideimgcount
@@ -236,7 +236,7 @@ if __name__ == "__main__":
             render_params["FINAL_EQR_WIDTH"] = 4096
             render_params["FINAL_EQR_HEIGHT"] = 4096
             render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
-            render_params["STD_ALPHA_FEATHER_SIZE"] = 43
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 41
         elif quality == "6k":
             render_params["SHARPENNING"] = 0.0
             render_params["EQR_WIDTH"] = (int(6144 / sideimgcount) + 1) * sideimgcount
@@ -244,7 +244,7 @@ if __name__ == "__main__":
             render_params["FINAL_EQR_WIDTH"] = 6144
             render_params["FINAL_EQR_HEIGHT"] = 6144
             render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
-            render_params["STD_ALPHA_FEATHER_SIZE"] = 53
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 57
         elif quality == "8k":
             render_params["SHARPENNING"] = 0.0
             render_params["EQR_WIDTH"] = (int(8192 / sideimgcount) + 1) * sideimgcount
@@ -252,7 +252,7 @@ if __name__ == "__main__":
             render_params["FINAL_EQR_WIDTH"] = 8192
             render_params["FINAL_EQR_HEIGHT"] = 8192
             render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
-            render_params["STD_ALPHA_FEATHER_SIZE"] = 61
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 81
         elif quality == "16k":
             render_params["SHARPENNING"] = 0.0
             render_params["EQR_WIDTH"] = (int(16384 / sideimgcount) + 1) * sideimgcount
@@ -260,7 +260,7 @@ if __name__ == "__main__":
             render_params["FINAL_EQR_WIDTH"] = 16384
             render_params["FINAL_EQR_HEIGHT"] = 16384
             render_params["SIDE_ALPHA_FEATHER_SIZE"] = 101
-            render_params["STD_ALPHA_FEATHER_SIZE"] = 87
+            render_params["STD_ALPHA_FEATHER_SIZE"] = 161
         else:
             sys.stderr.write("Unrecognized quality setting: " + quality)
             exit(1)
