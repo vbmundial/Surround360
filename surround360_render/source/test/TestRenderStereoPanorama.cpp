@@ -555,19 +555,12 @@ void poleToSideFlowThread(
   int maxBlendX = float(fisheyeSpherical->cols) * (kExtendFrac - 1.0f);
   for (int y = 0; y < warpedSphericalForEye->rows; ++y) {
     for (int x = 0; x < maxBlendX; ++x) {
-      const float srcB = warpedSphericalForEye->at<Vec4b>(y, x)[0];
-      const float srcG = warpedSphericalForEye->at<Vec4b>(y, x)[1];
-      const float srcR = warpedSphericalForEye->at<Vec4b>(y, x)[2];
-      const float srcA = warpedSphericalForEye->at<Vec4b>(y, x)[3];
-      const float wrapB = warpedExtendedFisheyeSpherical.at<Vec4b>(y, x + fisheyeSpherical->cols)[0];
-      const float wrapG = warpedExtendedFisheyeSpherical.at<Vec4b>(y, x + fisheyeSpherical->cols)[1];
-      const float wrapR = warpedExtendedFisheyeSpherical.at<Vec4b>(y, x + fisheyeSpherical->cols)[2];
+      const Vec4f src = warpedSphericalForEye->at<Vec4b>(y, x);
+      const Vec4f ext = warpedExtendedFisheyeSpherical.at<Vec4b>(y, x + fisheyeSpherical->cols);
       float alpha = 1.0f - rampf(x, float(maxBlendX) * 0.333f, float(maxBlendX) * 0.667f);
-      warpedSphericalForEye->at<Vec4b>(y, x) = Vec4b(
-        wrapB * alpha + srcB * (1.0f - alpha),
-        wrapG * alpha + srcG * (1.0f - alpha),
-        wrapR * alpha + srcR * (1.0f - alpha),
-        srcA);
+      Vec4b blended = ext * alpha + src * (1.0f - alpha);
+      blended[3] = max(ext[3], src[3]); // result alpha
+      warpedSphericalForEye->at<Vec4b>(y, x) = blended;
     }
   }
 
