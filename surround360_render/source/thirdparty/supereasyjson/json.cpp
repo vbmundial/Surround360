@@ -30,21 +30,44 @@ enum StackDepthType { InObject, InArray };
 ////////////////////////////////////////////////////////////////////////////////
 // Helper functions
 ////////////////////////////////////////////////////////////////////////////////
-static std::string Trim(const std::string &str) {
-  std::string s = str;
+// String trimming (https://stackoverflow.com/a/217605)
 
-  // remove white space in front
-  s.erase(s.begin(),
-          std::find_if(s.begin(), s.end(),
-                       std::not1(std::ptr_fun<int, int>(std::isspace))));
+// trim from start (in place)
+static void LTrim(std::string &s) {
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+		return !std::isspace(ch);
+	}));
+}
 
-  // remove trailing white space
-  s.erase(std::find_if(s.rbegin(), s.rend(),
-                       std::not1(std::ptr_fun<int, int>(std::isspace)))
-              .base(),
-          s.end());
+// trim from end (in place)
+static void RTrim(std::string &s) {
+	s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch) {
+		return !std::isspace(ch);
+	}).base(), s.end());
+}
 
-  return s;
+// trim from both ends (in place)
+static void Trim(std::string &s) {
+	LTrim(s);
+	RTrim(s);
+}
+
+// trim from start (copying)
+static inline std::string LTrimCopy(std::string s) {
+	LTrim(s);
+	return s;
+}
+
+// trim from end (copying)
+static inline std::string RTrimCopy(std::string s) {
+	RTrim(s);
+	return s;
+}
+
+// trim from both ends (copying)
+static inline std::string TrimCopy(std::string s) {
+	Trim(s);
+	return s;
 }
 
 // Finds the position of the first " character that is NOT preceeded immediately
@@ -543,7 +566,7 @@ static Value DeserializeInternal(const std::string &_str,
                                  std::stack<StackDepthType> &depth_stack) {
   Value v;
 
-  std::string str = Trim(_str);
+  std::string str = TrimCopy(_str);
   if (str[0] == '{') {
     // Error: Began with a { but doesn't end with one
     if (str[str.length() - 1] != '}')
@@ -672,7 +695,7 @@ static std::string UnescapeJSONString(const std::string &str) {
       s.push_back(c);
   }
 
-  return Trim(s);
+  return TrimCopy(s);
 }
 
 static Value DeserializeValue(std::string &str, bool *had_error,
@@ -680,7 +703,7 @@ static Value DeserializeValue(std::string &str, bool *had_error,
   Value v;
 
   *had_error = false;
-  str = Trim(str);
+  str = TrimCopy(str);
 
   if (str.length() == 0)
     return v;
@@ -861,7 +884,7 @@ static Value DeserializeArray(std::string &str,
   Array a;
   bool had_error = false;
 
-  str = Trim(str);
+  str = TrimCopy(str);
 
   // Arrays begin and end with [], so if we don't find one, it's an error
   if ((str[0] == '[') && (str[str.length() - 1] == ']'))
@@ -921,7 +944,7 @@ static Value DeserializeObj(const std::string &_str,
                             std::stack<StackDepthType> &depth_stack) {
   Object obj;
 
-  std::string str = Trim(_str);
+  std::string str = TrimCopy(_str);
 
   // Objects begin and end with {} so if we don't find a pair, it's an error
   if ((str[0] != '{') && (str[str.length() - 1] != '}'))

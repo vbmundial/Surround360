@@ -18,8 +18,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #include "CvUtil.h"
 #include "StringUtil.h"
@@ -72,15 +71,14 @@ static vector<string> getFilesInDir(
     const bool fullPath,
     int numFilesToReturn = -1) {
 
-  boost::filesystem::path dir(srcDir.c_str());
-
-  if(!boost::filesystem::is_directory(dir))
+  std::filesystem::path dir(srcDir.c_str());
+  if(!std::filesystem::is_directory(dir))
   { return vector<string>();}
 
   vector<string> out_file_names;
-  for(boost::filesystem::directory_entry & dent:boost::filesystem::directory_iterator(dir))
+  for(const std::filesystem::directory_entry& dent : std::filesystem::directory_iterator(dir))
   {
-      if(!boost::filesystem::is_regular_file(dent))
+      if(!std::filesystem::is_regular_file(dent))
           continue;
 
       if(fullPath)

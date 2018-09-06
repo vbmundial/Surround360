@@ -8,6 +8,7 @@
 */
 
 #include "RigDescription.h"
+#include <deque>
 
 namespace surround360 {
 

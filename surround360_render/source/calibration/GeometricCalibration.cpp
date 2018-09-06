@@ -2,8 +2,7 @@
 #include <unordered_map>
 #include <random>
 #include <array>
-#define BOOST_FILESYSTEM_NO_DEPRECATED
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include "opencv2/opencv.hpp"
 #include "opencv2/stitching/detail/matchers.hpp"
 #include "ceres/ceres.h"
@@ -53,19 +52,19 @@ void buildCameraIndexMaps(const Camera::Rig& rig) {
 // an image path is assumed to be of the form:
 // .../<camera id>/<frame index>.<extension>
 // e.g. 1/cam2/000123.bmp or rgb/cam14/000123.png
-std::string getCameraIdFromPath(const boost::filesystem::path& image) {
+std::string getCameraIdFromPath(const std::filesystem::path& image) {
   return image.parent_path().filename().string();
 }
 
-int getFrameIndexFromPath(const boost::filesystem::path& image) {
+int getFrameIndexFromPath(const std::filesystem::path& image) {
   return std::stoi(image.stem().string());
 }
 
-bool hasCameraIndex(const boost::filesystem::path& image) {
+bool hasCameraIndex(const std::filesystem::path& image) {
   return cameraIdToIndex.count(getCameraIdFromPath(image));
 }
 
-int getCameraIndex(const boost::filesystem::path& image) {
+int getCameraIndex(const std::filesystem::path& image) {
   return cameraIdToIndex.at(getCameraIdFromPath(image));
 }
 
@@ -74,7 +73,7 @@ std::string makeArtificialPath(int frame, const std::string id) {
   return std::to_string(frame) + "/" + id;
 }
 
-cv::Mat loadImage(const boost::filesystem::path& path) {
+cv::Mat loadImage(const std::filesystem::path& path) {
   return cv::imread((FLAGS_frames / path).string());
 }
 

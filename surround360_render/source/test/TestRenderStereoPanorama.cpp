@@ -186,7 +186,7 @@ void projectSphericalCamImages(
 
   if (FLAGS_save_debug_images) {
     const string projectionsDir =
-      FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/projections/";
+      FLAGS_output_data_dir + "/debug/" + FLAGS_frame_number + "/projections";
     for (int camIdx = 0; camIdx < rig.getSideCameraCount(); ++camIdx) {
       const string cropImageFilename = projectionsDir +
         "/crop_" + rig.getSideCameraId(camIdx) + ".tif";
