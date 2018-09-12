@@ -114,5 +114,49 @@ void topDownAlphaFade(Mat& img);
 Mat flattenLayersAlphaSoftmax(
   const vector<Mat>& layers, const float softmaxCoef);
 
+template <typename T>
+class CvMaxValue { };
+
+template<>
+class CvMaxValue<unsigned char>
+{
+	static constexpr unsigned char value = 255;
+};
+
+template<>
+class CvMaxValue<float>
+{
+	static constexpr float value = 1.0f;
+};
+
+template<>
+class CvMaxValue<double>
+{
+	static constexpr double value = 1.0;
+};
+
+
+inline bool hasNanPixels(cv::Mat mat) {
+	if (mat.empty())
+		return false;
+	Mat nanMask = (mat != mat);
+	vector<Mat> nanMaskChannels;
+	split(nanMask, nanMaskChannels);
+	for (Mat channel : nanMaskChannels) {
+		int nanCount = countNonZero(channel);
+		if (nanCount > 0)
+			return true;
+	}
+	return false;
+}
+
+inline bool hasNanPixels(vector<Mat> mats) {
+	for (Mat mat : mats) {
+		if (hasNanPixels(mat))
+			return true;
+	}
+	return false;
+}
+
 } // namespace util
 } // namespace surround360

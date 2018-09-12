@@ -1246,8 +1246,8 @@ class CameraIsp {
       Mat lowPass(height, width, CV_32FC3);
       const ReflectBoundary<int> reflectB;
       const float maxVal = (1 << outputBpp) - 1.0f;
-      iirLowPass<ReflectBoundary<int>, ReflectBoundary<int>, Vec3f>(demosaicedImage, sharpeningSupport, lowPass, reflectB, reflectB, maxVal);
-      sharpenWithIirLowPass<Vec3f>(demosaicedImage,
+      iirLowPass<ReflectBoundary<int>, ReflectBoundary<int>, float>(demosaicedImage, sharpeningSupport, lowPass, reflectB, reflectB, maxVal);
+      sharpenWithIirLowPass<float>(demosaicedImage,
           lowPass,
           1.0f + sharpening.x,
           1.0f + sharpening.y,

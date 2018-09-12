@@ -20,6 +20,7 @@ namespace optical_flow {
 
 using namespace std;
 using namespace cv;
+using namespace surround360::util;
 
 // when rendering panoramas from slices of many novel views, there is lots of
 // wasted computation. this is an idea for reducing that computation: build up
@@ -40,7 +41,23 @@ struct LazyNovelViewBuffer {
   }
 };
 
-struct NovelViewUtil {
+class NovelViewUtil {
+	template <typename T>
+	static Mat combineNovelViewsImpl(
+		const Mat& imageL,
+		const float blendL,
+		const Mat& imageR,
+		const float blendR,
+		const Mat& flowLtoR,
+		const Mat& flowRtoL);
+
+	template <typename T>
+	static Mat combineLazyViewsImpl(
+		const Mat& imageL,
+		const Mat& imageR,
+		const Mat& flowMagL,
+		const Mat& flowMagR);
+public:
   // given an image, a flow vector field of the same size, generate a new image by
   // applying the flow to the input, scaled by t.
   static Mat generateNovelViewSimpleCvRemap(
@@ -57,7 +74,7 @@ struct NovelViewUtil {
   // of occlusion). to avoid seams, the logic for determining if/how much deghosting to
   // apply is not binary; instead it uses softmaxes to smoothly transition between normal
   // blending and flow-magnitude weighted blending.
-  static Mat combineNovelViews(
+	static Mat combineNovelViews(
     const Mat& imageL,
     const float blendL,
     const Mat& imageR,
@@ -78,7 +95,7 @@ struct NovelViewUtil {
 // the is an abstract base class for novel view generators
 class NovelViewGenerator {
 public:
-  virtual ~NovelViewGenerator() {};
+  virtual ~NovelViewGenerator() = default;
 
   // a NovelViewGenerator may be asked to generate many novel views, but it
   // only needs to do somethings once (like computing disparity). this will be
@@ -140,17 +157,25 @@ public:
 // this is a base class for novel view generators that work by reduction to optical flow.
 // it handles lazy generation fo the novel views, given flow.
 class NovelViewGeneratorLazyFlow : public NovelViewGenerator {
+	template<typename T>
+	pair<Mat, Mat> renderLazyNovelViewImpl(
+		const int width,
+		const int height,
+		const vector<vector<Point3f>>& novelViewWarpBuffer,
+		const Mat& srcImage,
+		const Mat& opticalFlow,
+		const bool invertT);
 public:
   Mat imageL, imageR;
   Mat flowLtoR, flowRtoL;
 
-  ~NovelViewGeneratorLazyFlow() {}
+	~NovelViewGeneratorLazyFlow() = default;
 
   void generateNovelView(
     const double shiftFromL,
     Mat& outNovelViewMerged,
     Mat& outNovelViewFromL,
-    Mat& outNovelViewFromR);
+    Mat& outNovelViewFromR) override;
 
   pair<Mat, Mat> renderLazyNovelView(
     const int width,
@@ -158,12 +183,12 @@ public:
     const vector<vector<Point3f>>& novelViewWarpBuffer,
     const Mat& srcImage,
     const Mat& opticalFlow,
-    const bool invertT);
+    const bool invertT) override;
 
-  pair<Mat, Mat> combineLazyNovelViews(const LazyNovelViewBuffer& lazyBuffer);
+  virtual pair<Mat, Mat> combineLazyNovelViews(const LazyNovelViewBuffer& lazyBuffer) override;
 
-  Mat getFlowLtoR() { return flowLtoR; }
-  Mat getFlowRtoL() { return flowRtoL; }
+  Mat getFlowLtoR() override { return flowLtoR; }
+  Mat getFlowRtoL() override { return flowRtoL; }
 };
 
 // the name "asymmetric" here refers to the idea that we compute an optical flow from
@@ -178,15 +203,15 @@ public:
 
   NovelViewGeneratorAsymmetricFlow(const string flowAlgName) : flowAlgName(flowAlgName) {}
 
-  ~NovelViewGeneratorAsymmetricFlow() {}
+	~NovelViewGeneratorAsymmetricFlow() = default;
 
-  void prepare(
+	virtual void prepare(
     const Mat& colorImageL,
     const Mat& colorImageR,
     const Mat& prevFlowLtoR,
     const Mat& prevFlowRtoL,
     const Mat& prevColorImageL,
-    const Mat& prevColorImageR);
+    const Mat& prevColorImageR) override;
 };
 
 } // namespace reprojection

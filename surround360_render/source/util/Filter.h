@@ -10,6 +10,7 @@
 #pragma once
 
 #include "MathUtil.h"
+#include "CvUtil.h"
 
 namespace surround360 {
 namespace util {
@@ -36,15 +37,16 @@ struct ReflectBoundary {
 };
 
 // Implements a two-tap IIR low pass filter
-template <typename H, typename V, typename P>
+template <typename H, typename V, typename T>
 void iirLowPass(
     const Mat inputImage,
     const float amount,
     Mat& lpImage,
     const H&  hBoundary,
     const V&  vBoundary,
-    const float maxVal = 255.0f) {
+    const float maxVal = CvMaxValue<T>::value) {
 
+	using P = Vec<T, 3>;
   const float alpha = powf(amount, 1.0f/4.0f);
 
   const int width = inputImage.cols;
@@ -67,10 +69,10 @@ void iirLowPass(
     for (int j = width - 2; j >= -1; --j) {
       Vec3f ip(buffer.at<Vec3f>(hBoundary(j, width)));
       v = lerp(ip, v, alpha);
-      lpImage.at<P>(i, j + 1)[0] = clamp(v[0], 0.0f, maxVal);
-      lpImage.at<P>(i, j + 1)[1] = clamp(v[1], 0.0f, maxVal);
-      lpImage.at<P>(i, j + 1)[2] = clamp(v[2], 0.0f, maxVal);
-    }
+			lpImage.at<P>(i, j + 1)[0] = clamp(v[0], 0.0f, maxVal);
+			lpImage.at<P>(i, j + 1)[1] = clamp(v[1], 0.0f, maxVal);
+			lpImage.at<P>(i, j + 1)[2] = clamp(v[2], 0.0f, maxVal);
+		}
   }
 
   // Vertical pass
@@ -86,22 +88,24 @@ void iirLowPass(
     for (int i = height - 2; i >= -1; --i) {
       Vec3f ip = buffer.at<Vec3f>(vBoundary(i, height));
       v = lerp(ip, v, alpha);
-      lpImage.at<P>(i + 1, j)[0] = clamp(v[0], 0.0f, maxVal);
-      lpImage.at<P>(i + 1, j)[1] = clamp(v[1], 0.0f, maxVal);
-      lpImage.at<P>(i + 1, j)[2] = clamp(v[2], 0.0f, maxVal);
-    }
+			lpImage.at<P>(i + 1, j)[0] = clamp(v[0], 0.0f, maxVal);
+			lpImage.at<P>(i + 1, j)[1] = clamp(v[1], 0.0f, maxVal);
+			lpImage.at<P>(i + 1, j)[2] = clamp(v[2], 0.0f, maxVal);
+		}
   }
 }
 
-template <typename P>
+template <typename T>
 void sharpenWithIirLowPass(
     Mat& inputImage,
     const Mat& lpImage,
     const float rAmount,
     const float gAmount,
     const float bAmount,
-    const float noiseCore = 100.0f,
-    const float maxVal = 255.0f) {
+    const float noiseCore = 100.0f * CvMaxValue<T>::value / 255.0f,
+    const float maxVal = CvMaxValue<T>::value) {
+
+	using P = Vec<T, 3>;
   // Iir unsharp mask with noise coring
   for (int i = 0; i < inputImage.rows; ++i) {
     for (int j = 0; j < inputImage.cols; ++j) {
@@ -109,31 +113,32 @@ void sharpenWithIirLowPass(
       P& p = inputImage.at<P>(i, j);
       // High pass signal - just the residual of the low pass
       // subtracted from the original signal.
-      const Vec3f hp(
-          p[0] - lp[0],
-          p[1] - lp[1],
-          p[2] - lp[2]);
+			const Vec3f hp {
+				p[0] - lp[0],
+				p[1] - lp[1],
+				p[2] - lp[2] };
       // Noise coring
-      const Vec3f ng(
-          1.0f - expf(-(square(hp[0]) * noiseCore)),
-          1.0f - expf(-(square(hp[1]) * noiseCore)),
-          1.0f - expf(-(square(hp[2]) * noiseCore)));
+			const Vec3f ng{
+					1.0f - expf(-(square(hp[0]) * noiseCore)),
+					1.0f - expf(-(square(hp[1]) * noiseCore)),
+					1.0f - expf(-(square(hp[2]) * noiseCore)) };
       // Unsharp mask with coring
-      p[0] = clamp(lp[0] + hp[0] * ng[0] * rAmount,  0.0f, maxVal);
-      p[1] = clamp(lp[1] + hp[1] * ng[1] * gAmount,  0.0f, maxVal);
-      p[2] = clamp(lp[2] + hp[2] * ng[2] * bAmount,  0.0f, maxVal);
-    }
+			Vec3f amount { rAmount, gAmount, bAmount };
+			p[0] = clamp(lp[0] + hp[0] * ng[0] * rAmount, 0.0f, maxVal);
+			p[1] = clamp(lp[1] + hp[1] * ng[1] * gAmount, 0.0f, maxVal);
+			p[2] = clamp(lp[2] + hp[2] * ng[2] * bAmount, 0.0f, maxVal);
+		}
   }
 }
 
-template <typename P>
+template <typename T>
 inline void sharpenWithIirLowPass(
     Mat& inputImage,
     const Mat& lpImage,
     const float amount,
-    const float noiseCore = 100.0f) {
+    const float noiseCore = 100.0f * CvMaxValue<T>::value / 255.0f) {
 
-  sharpenWithIirLowPass<P>(inputImage, lpImage, amount, amount, amount, noiseCore);
+  sharpenWithIirLowPass<T>(inputImage, lpImage, amount, amount, amount, noiseCore);
 }
 
 }

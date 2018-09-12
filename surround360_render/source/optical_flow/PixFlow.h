@@ -125,14 +125,18 @@ struct PixFlow : public OpticalFlowInterface {
     cvtColor(rgba0byteDownscaled, I0Grey,  CV_BGRA2GRAY);
     cvtColor(rgba1byteDownscaled, I1Grey,  CV_BGRA2GRAY);
 
-    I0Grey.convertTo(I0, CV_32F);
-    I1Grey.convertTo(I1, CV_32F);
-    I0 /= 255.0f;
-    I1 /= 255.0f;
-    channels0[3].convertTo(alpha0, CV_32F);
-    channels1[3].convertTo(alpha1, CV_32F);
-    alpha0 /= 255.0f;
-    alpha1 /= 255.0f;
+		I0Grey.convertTo(I0, CV_32F);
+	  channels0[3].convertTo(alpha0, CV_32F);
+		if (rgba0byte.depth() == CV_8U) {
+			I0 /= 255.0f;
+			alpha0 /= 255.0f;
+		}
+		I1Grey.convertTo(I1, CV_32F);
+		channels1[3].convertTo(alpha1, CV_32F);
+		if (rgba1byte.depth() == CV_8U) {
+			I1 /= 255.0f;
+			alpha1 /= 255.0f;
+		}
 
     GaussianBlur(I0, I0, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);
     GaussianBlur(I1, I1, Size(kPreBlurKernelWidth, kPreBlurKernelWidth), kPreBlurSigma);

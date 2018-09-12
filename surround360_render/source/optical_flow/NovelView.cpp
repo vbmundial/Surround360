@@ -22,7 +22,6 @@ namespace optical_flow {
 
 using namespace std;
 using namespace cv;
-using namespace surround360::util;
 
 Mat NovelViewUtil::generateNovelViewSimpleCvRemap(
     const Mat& srcImage,
@@ -44,7 +43,8 @@ Mat NovelViewUtil::generateNovelViewSimpleCvRemap(
   return novelView;
 }
 
-Mat NovelViewUtil::combineNovelViews(
+template<typename T>
+Mat NovelViewUtil::combineNovelViewsImpl(
     const Mat& imageL,
     const float blendL,
     const Mat& imageR,
@@ -52,18 +52,20 @@ Mat NovelViewUtil::combineNovelViews(
     const Mat& flowLtoR,
     const Mat& flowRtoL) {
 
-  Mat blendImage(imageL.size(), CV_8UC4);
+	using Vec4 = Vec<T, 4>;
+	float maxVal = CvMaxValue<T>::value;
+  Mat blendImage(imageL.size(), CV_MAKETYPE(imageL.depth(), 4));
   for (int y = 0; y < imageL.rows; ++y) {
     for (int x = 0; x < imageL.cols; ++x) {
-      const Vec4b colorL = imageL.at<Vec4b>(y, x);
-      const Vec4b colorR = imageR.at<Vec4b>(y, x);
-      Vec4b colorMixed;
+      const Vec4 colorL = imageL.at<Vec4>(y, x);
+      const Vec4 colorR = imageR.at<Vec4>(y, x);
+      Vec4 colorMixed;
       if (colorL[3] == 0 && colorR[3] == 0 ) {
-        colorMixed = Vec4b(0, 0, 0, 0);
+        colorMixed = Vec4(0, 0, 0, 0);
       } else if (colorL[3] > 0 && colorR[3] == 0) {
-        colorMixed = Vec4b(colorL[0], colorL[1], colorL[2], 255);
+        colorMixed = Vec4(colorL[0], colorL[1], colorL[2], maxVal);
       } else if (colorL[3] == 0 && colorR[3] > 0) {
-        colorMixed = Vec4b(colorR[0], colorR[1], colorR[2], 255);
+        colorMixed = Vec4(colorR[0], colorR[1], colorR[2], maxVal);
       } else {
         const Point2f fLR = flowLtoR.at<Point2f>(y, x);
         const Point2f fRL = flowRtoL.at<Point2f>(y, x);
@@ -72,13 +74,13 @@ Mat NovelViewUtil::combineNovelViews(
         const float colorDiff =
           (std::abs(colorL[0] - colorR[0]) +
            std::abs(colorL[1] - colorR[1]) +
-           std::abs(colorL[2] - colorR[2])) / 255.0f;
+           std::abs(colorL[2] - colorR[2])) / static_cast<float>(maxVal);
         static const float kColorDiffCoef = 10.0f;
         static const float kSoftmaxSharpness = 10.0f;
         static const float kFlowMagCoef = 100.0f; // determines how much we prefer larger flows
         const float deghostCoef = tanhf(colorDiff * kColorDiffCoef);
-        const float alphaL = colorL[3] / 255.0f;
-        const float alphaR = colorR[3] / 255.0f;
+        const float alphaL = colorL[3] / static_cast<float>(maxVal);
+        const float alphaR = colorR[3] / static_cast<float>(maxVal);
         const double expL =
           exp(kSoftmaxSharpness * blendL * alphaL * (1.0 + kFlowMagCoef * flowMagRL));
         const double expR =
@@ -86,40 +88,62 @@ Mat NovelViewUtil::combineNovelViews(
         const double sumExp = expL + expR + 0.00001;
         const float softmaxL = float(expL / sumExp);
         const float softmaxR = float(expR / sumExp);
-        colorMixed = Vec4b(
+        colorMixed = Vec4(
           float(colorL[0]) * lerp(blendL, softmaxL, deghostCoef) + float(colorR[0]) * lerp(blendR, softmaxR, deghostCoef),
           float(colorL[1]) * lerp(blendL, softmaxL, deghostCoef) + float(colorR[1]) * lerp(blendR, softmaxR, deghostCoef),
           float(colorL[2]) * lerp(blendL, softmaxL, deghostCoef) + float(colorR[2]) * lerp(blendR, softmaxR, deghostCoef),
-          255);
+          maxVal);
       }
-      blendImage.at<Vec4b>(y, x) = colorMixed;
+      blendImage.at<Vec4>(y, x) = colorMixed;
     }
   }
   return blendImage;
 }
 
-Mat NovelViewUtil::combineLazyViews(
+
+Mat NovelViewUtil::combineNovelViews(
+	const Mat& imageL,
+	const float blendL,
+	const Mat& imageR,
+	const float blendR,
+	const Mat& flowLtoR,
+	const Mat& flowRtoL) {
+	
+	assert(imageL.depth() == imageR.depth());
+	if (imageL.depth() == CV_8U) {
+		return combineNovelViewsImpl<uchar>(imageL, blendL, imageR, blendR, flowLtoR, flowRtoL);
+	}
+	else {
+		return combineNovelViewsImpl<float>(imageL, blendL, imageR, blendR, flowLtoR, flowRtoL);
+	}
+}
+
+template<typename T>
+Mat NovelViewUtil::combineLazyViewsImpl(
     const Mat& imageL,
     const Mat& imageR,
     const Mat& flowMagL,
     const Mat& flowMagR) {
 
-  Mat blendImage(imageL.size(), CV_8UC4);
+	using Vec4 = Vec<T, 4>;
+	float maxVal = CvMaxValue<T>::value;
+
+	Mat blendImage(imageL.size(), CV_MAKETYPE(imageL.depth(), 4));
   for (int y = 0; y < imageL.rows; ++y) {
     for (int x = 0; x < imageL.cols; ++x) {
-      const Vec4b colorL = imageL.at<Vec4b>(y, x);
-      const Vec4b colorR = imageR.at<Vec4b>(y, x);
+      const Vec4 colorL = imageL.at<Vec4>(y, x);
+      const Vec4 colorR = imageR.at<Vec4>(y, x);
 
-      const unsigned char outAlpha =
-        max(colorL[3], colorR[3]) / 255.0f > 0.1 ? 255 : 0;
+      const T outAlpha =
+				max(colorL[3], colorR[3]) / maxVal > 0.1 ? maxVal : 0;
 
-      Vec4b colorMixed;
+      Vec4 colorMixed;
       if (colorL[3] == 0 && colorR[3] == 0) {
-        colorMixed = Vec4b(0, 0, 0, outAlpha);
+        colorMixed = Vec4(0, 0, 0, outAlpha);
       } else if (colorL[3] == 0) {
-        colorMixed = Vec4b(colorR[0], colorR[1], colorR[2], outAlpha);
+        colorMixed = Vec4(colorR[0], colorR[1], colorR[2], outAlpha);
       } else if (colorR[3] == 0) {
-        colorMixed = Vec4b(colorL[0], colorL[1], colorL[2], outAlpha);
+        colorMixed = Vec4(colorL[0], colorL[1], colorL[2], outAlpha);
       } else {
         const float magL = flowMagL.at<float>(y,x) / float(imageL.cols);
         const float magR = flowMagR.at<float>(y,x) / float(imageL.cols);
@@ -131,7 +155,7 @@ Mat NovelViewUtil::combineLazyViews(
         const float colorDiff =
           (std::abs(colorL[0] - colorR[0]) +
            std::abs(colorL[1] - colorR[1]) +
-           std::abs(colorL[2] - colorR[2])) / 255.0f;
+           std::abs(colorL[2] - colorR[2])) / static_cast<float>(maxVal);
         static const float kColorDiffCoef = 10.0f;
         static const float kSoftmaxSharpness = 10.0f;
         static const float kFlowMagCoef = 20.0f; // NOTE: this is scaled differently than the test version due to normalizing magL & magR by imageL.cols
@@ -141,16 +165,35 @@ Mat NovelViewUtil::combineLazyViews(
         const double sumExp = expL + expR + 0.00001;
         const float softmaxL = float(expL / sumExp);
         const float softmaxR = float(expR / sumExp);
-        colorMixed = Vec4b(
+        colorMixed = Vec4(
           float(colorL[0]) * lerp(blendL, softmaxL, deghostCoef) + float(colorR[0]) * lerp(blendR, softmaxR, deghostCoef),
           float(colorL[1]) * lerp(blendL, softmaxL, deghostCoef) + float(colorR[1]) * lerp(blendR, softmaxR, deghostCoef),
           float(colorL[2]) * lerp(blendL, softmaxL, deghostCoef) + float(colorR[2]) * lerp(blendR, softmaxR, deghostCoef),
-          255);
+					outAlpha);
+				if (isinf(expL) || isinf(expR)) { // can cause NaN pixels
+					colorMixed = (expL > expR) ? Vec4{ colorL[0], colorL[1], colorL[2], outAlpha } : 
+						Vec4{ colorR[0], colorR[1], colorR[2], outAlpha };
+				}
       }
-      blendImage.at<Vec4b>(y, x) = colorMixed;
+      blendImage.at<Vec4>(y, x) = colorMixed;
     }
   }
   return blendImage;
+}
+
+Mat NovelViewUtil::combineLazyViews(
+	const Mat& imageL,
+	const Mat& imageR,
+	const Mat& flowMagL,
+	const Mat& flowMagR) {
+
+	assert(imageL.depth() == imageR.depth());
+	if (imageL.depth() == CV_8U) {
+		return combineLazyViewsImpl<uchar>(imageL, imageR, flowMagL, flowMagR);
+	}
+	else {
+		return combineLazyViewsImpl<float>(imageL, imageR, flowMagL, flowMagR);
+	}
 }
 
 void NovelViewGeneratorLazyFlow::generateNovelView(
@@ -171,7 +214,8 @@ void NovelViewGeneratorLazyFlow::generateNovelView(
     flowLtoR, flowRtoL);
 }
 
-pair<Mat, Mat> NovelViewGeneratorLazyFlow::renderLazyNovelView(
+template<typename T>
+pair<Mat, Mat> NovelViewGeneratorLazyFlow::renderLazyNovelViewImpl(
     const int width,
     const int height,
     const vector<vector<Point3f>>& novelViewWarpBuffer,
@@ -179,6 +223,7 @@ pair<Mat, Mat> NovelViewGeneratorLazyFlow::renderLazyNovelView(
     const Mat& opticalFlow,
     const bool invertT) {
 
+	using Vec4 = Vec<T, 4>;
   // a composition of remap
   Mat warpOpticalFlow = Mat(Size(width, height), CV_32FC2);
   for (int y = 0; y < height; ++y) {
@@ -214,13 +259,29 @@ pair<Mat, Mat> NovelViewGeneratorLazyFlow::renderLazyNovelView(
       const Point3f lazyWarp = novelViewWarpBuffer[x][y];
       Point2f flowDir = remappedFlow.at<Point2f>(y, x);
       const float t = invertT ? (1.0f - lazyWarp.z) : lazyWarp.z;
-      novelView.at<Vec4b>(y, x)[3] =
-        int((1.0f - t) * novelView.at<Vec4b>(y, x)[3]);
+      novelView.at<Vec4>(y, x)[3] =
+        (1.0f - t) * novelView.at<Vec4>(y, x)[3];
       novelViewFlowMag.at<float>(y, x) =
         sqrtf(flowDir.x * flowDir.x + flowDir.y * flowDir.y);
     }
   }
   return make_pair(novelView, novelViewFlowMag);
+}
+
+pair<Mat, Mat> NovelViewGeneratorLazyFlow::renderLazyNovelView(
+	const int width,
+	const int height,
+	const vector<vector<Point3f>>& novelViewWarpBuffer,
+	const Mat& srcImage,
+	const Mat& opticalFlow,
+	const bool invertT) {
+
+	if (srcImage.depth() == CV_8U) {
+		return renderLazyNovelViewImpl<uchar>(width, height, novelViewWarpBuffer, srcImage, opticalFlow, invertT);
+	}
+	else {
+		return renderLazyNovelViewImpl<float>(width, height, novelViewWarpBuffer, srcImage, opticalFlow, invertT);
+	}
 }
 
 pair<Mat, Mat> NovelViewGeneratorLazyFlow::combineLazyNovelViews(

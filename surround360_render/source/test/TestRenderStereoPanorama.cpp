@@ -196,7 +196,7 @@ void projectSphericalCamImages(
 }
 
 // this is where the main work of optical flow for adjacent side cameras is done
-void prepareNovelViewGeneratorThread(
+void prepareNovelViewGenerator(
     const int overlapImageWidth,
     const int leftIdx, // only used to determine debug image filename
     Mat* imageL,
@@ -270,7 +270,7 @@ void prepareNovelViewGeneratorThread(
 }
 
 // a "chunk" is the portion from a pair of overlapping cameras. returns left/right images
-void renderStereoPanoramaChunksThread(
+void renderStereoPanoramaChunks(
     const int leftIdx, // left camera
     const int numCams,
     const int camImageWidth,
@@ -322,25 +322,26 @@ void prepareNovelViewGeneratorAndRenderStereoPanoramaChunksThread(
     //NovelViewGenerator* novelViewGen,
     Mat* chunkL,
     Mat* chunkR) {
-  NovelViewGeneratorAsymmetricFlow nvg(FLAGS_side_flow_alg);
-  prepareNovelViewGeneratorThread(
-    overlapImageWidth,
-    leftIdx,
-    &imageL,
-    &imageR,
-    &nvg);
 
-  renderStereoPanoramaChunksThread(
-    leftIdx,
-    numCams,
-    camImageWidth,
-    camImageHeight,
-    numNovelViews,
-    fovHorizontalRadians,
-    vergeAtInfinitySlabDisplacement,
-    &nvg,
-    chunkL,
-    chunkR);
+	NovelViewGeneratorAsymmetricFlow nvg(FLAGS_side_flow_alg);
+	prepareNovelViewGenerator(
+		overlapImageWidth,
+		leftIdx,
+		&imageL,
+		&imageR,
+		&nvg);
+
+	renderStereoPanoramaChunks(
+		leftIdx,
+		numCams,
+		camImageWidth,
+		camImageHeight,
+		numNovelViews,
+		fovHorizontalRadians,
+		vergeAtInfinitySlabDisplacement,
+		&nvg,
+		chunkL,
+		chunkR);
 }
 
 // generates a left/right eye equirect panorama using slices of novel views
@@ -394,7 +395,7 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
       threads.front().join();
       threads.pop_front();
     }
-    threads.push_back(std::thread(
+    threads.emplace_back(std::thread(
       prepareNovelViewGeneratorAndRenderStereoPanoramaChunksThread,
       overlapImageWidth,
       leftIdx,
@@ -426,8 +427,10 @@ void generateRingOfNovelViewsAndRenderStereoSpherical(
   novelViewRuntime = time / 2.;
 }
 
+
 // handles flow between the fisheye top or bottom with the left/right eye side panoramas
-void poleToSideFlowThread(
+template<typename T>
+void poleToSideFlowThreadImpl(
     string eyeName,
     bool isTopPole,
     const RigDescription& rig,
@@ -435,21 +438,24 @@ void poleToSideFlowThread(
     Mat* fisheyeSpherical,
     Mat* warpedSphericalForEye) {
 
+	using Vec4 = Vec<T, 4>;
+
   // crop the side panorama to the height of the pole image
   Mat croppedSideSpherical = (*sideSphericalForEye)(Rect(0, 0, fisheyeSpherical->cols, fisheyeSpherical->rows));
-  croppedSideSpherical = featherAlphaChannel(croppedSideSpherical, FLAGS_std_alpha_feather_size);
+	croppedSideSpherical = featherAlphaChannel(croppedSideSpherical, FLAGS_std_alpha_feather_size);
+	//Mat croppedSideSpherical = featherAlphaChannel(*sideSphericalForEye, FLAGS_std_alpha_feather_size);
 
   // extend the panoramas and wrap horizontally so we can avoid a seam
   const float kExtendFrac = 1.2f;
   const int extendedWidth = float(fisheyeSpherical->cols) * kExtendFrac;
-  Mat extendedSideSpherical(Size(extendedWidth, fisheyeSpherical->rows), CV_8UC4);
-  Mat extendedFisheyeSpherical(extendedSideSpherical.size(),  CV_8UC4);
+  Mat extendedSideSpherical(Size(extendedWidth, fisheyeSpherical->rows), CV_MAKE_TYPE(fisheyeSpherical->depth(), 4));
+  Mat extendedFisheyeSpherical(extendedSideSpherical.size(), CV_MAKE_TYPE(fisheyeSpherical->depth(), 4));
   for (int y = 0; y < extendedSideSpherical.rows; ++y) {
     for (int x = 0; x < extendedSideSpherical.cols; ++x) {
-      extendedSideSpherical.at<Vec4b>(y, x) =
-        croppedSideSpherical.at<Vec4b>(y, x % fisheyeSpherical->cols);
-      extendedFisheyeSpherical.at<Vec4b>(y, x) =
-        fisheyeSpherical->at<Vec4b>(y, x % fisheyeSpherical->cols);
+      extendedSideSpherical.at<Vec4>(y, x) =
+        croppedSideSpherical.at<Vec4>(y, x % fisheyeSpherical->cols);
+      extendedFisheyeSpherical.at<Vec4>(y, x) =
+        fisheyeSpherical->at<Vec4>(y, x % fisheyeSpherical->cols);
     }
   }
 
@@ -555,12 +561,12 @@ void poleToSideFlowThread(
   int maxBlendX = float(fisheyeSpherical->cols) * (kExtendFrac - 1.0f);
   for (int y = 0; y < warpedSphericalForEye->rows; ++y) {
     for (int x = 0; x < maxBlendX; ++x) {
-      const Vec4f src = warpedSphericalForEye->at<Vec4b>(y, x);
-      const Vec4f ext = warpedExtendedFisheyeSpherical.at<Vec4b>(y, x + fisheyeSpherical->cols);
+      const Vec4f src = warpedSphericalForEye->at<Vec4>(y, x);
+      const Vec4f ext = warpedExtendedFisheyeSpherical.at<Vec4>(y, x + fisheyeSpherical->cols);
       float alpha = 1.0f - rampf(x, float(maxBlendX) * 0.333f, float(maxBlendX) * 0.667f);
-      Vec4b blended = ext * alpha + src * (1.0f - alpha);
+      Vec4 blended = ext * alpha + src * (1.0f - alpha);
       blended[3] = max(ext[3], src[3]); // result alpha
-      warpedSphericalForEye->at<Vec4b>(y, x) = blended;
+      warpedSphericalForEye->at<Vec4>(y, x) = blended;
     }
   }
 
@@ -568,12 +574,12 @@ void poleToSideFlowThread(
   //    1               for phi from 0 to phiMid
   //    linear drop-off for phi from phiMid to phiRampEnd
   //    0               for phi from phiRampEnd to totalRadius
-  for (int y = 0; y < warp.rows; ++y) {
-    const float phi = poleCameraRadius * float(y + 0.5f) / float(warp.rows);
+  for (int y = 0; y < warpedSphericalForEye->rows; ++y) {
+    const float phi = poleCameraRadius * float(y + 0.5f) / float(warpedSphericalForEye->rows);
     const float alpha = 1.0f - rampf(phi, phiMid, phiRampEnd);
-    for (int x = 0; x < warp.cols; ++x) {
-      (*warpedSphericalForEye).at<Vec4b>(y, x)[3] *= alpha;
-    }
+		for (int x = 0; x < warpedSphericalForEye->cols; ++x) {
+			warpedSphericalForEye->at<Vec4>(y, x)[3] *= alpha;
+		}
   }
 
   copyMakeBorder(
@@ -601,6 +607,22 @@ void poleToSideFlowThread(
   }
 }
 
+void poleToSideFlowThread(
+	string eyeName,
+	bool isTopPole,
+	const RigDescription& rig,
+	Mat* sideSphericalForEye,
+	Mat* fisheyeSpherical,
+	Mat* warpedSphericalForEye)  {
+	
+	assert(sideSphericalForEye->depth() == fisheyeSpherical->depth());
+	if (sideSphericalForEye->depth() == CV_8U) {
+		poleToSideFlowThreadImpl<uchar>(eyeName, isTopPole, rig, sideSphericalForEye, fisheyeSpherical, warpedSphericalForEye);
+	} else {
+		poleToSideFlowThreadImpl<float>(eyeName, isTopPole, rig, sideSphericalForEye, fisheyeSpherical, warpedSphericalForEye);
+	}
+}
+
 // does pole removal from the two bottom cameras, and projects the result to equirect
 void prepareBottomImagesThread(
     const RigDescription& rig,
@@ -615,20 +637,22 @@ void prepareBottomImagesThread(
     const string bottomImagePath = cameraDir + "/" + FLAGS_frame_number + "." + extension;
     Mat bottomImage = imreadExceptionOnFail(bottomImagePath, CV_LOAD_IMAGE_UNCHANGED);
     if (FLAGS_enable_pole_removal) {
-      if (bottomImage.channels() != 4) {
-        cvtColor(bottomImage, bottomImage, CV_BGR2BGRA);
-        const string poleMaskPath = FLAGS_bottom_pole_masks_dir + "/" 
-                                  + rig.rigBottomOnly[i].id + ".tif";
-        Mat bottomRedMask = imreadExceptionOnFail(poleMaskPath, CV_LOAD_IMAGE_COLOR);
-        cutRedMaskOutOfAlphaChannel(bottomImage, bottomRedMask);
-      }
+			if (bottomImage.channels() != 4) {
+				cvtColor(bottomImage, bottomImage, CV_BGR2BGRA);
+			}
+      const string poleMaskPath = FLAGS_bottom_pole_masks_dir + "/" 
+                                + rig.rigBottomOnly[i].id + ".tif";
+      Mat redMask = imread(poleMaskPath, CV_LOAD_IMAGE_COLOR);
+			if (!redMask.empty()) {
+				cutRedMaskOutOfAlphaChannel(bottomImage, redMask);
+			}
     }
 
     const Camera& camera = rig.rigBottomOnly[i];
     bottomSpherical.create(
       FLAGS_eqr_height * camera.getFov() / M_PI,
       FLAGS_eqr_width,
-      CV_8UC4);
+      CV_MAKE_TYPE(bottomImage.depth(), 4));
     bicubicRemapToSpherical(
       bottomSpherical,
       bottomImage,
@@ -644,7 +668,7 @@ void prepareBottomImagesThread(
 
     // Remove upper half of projected image (it is flipped, so lower half)
     Size size = bottomSpherical.size();
-    bottomSpherical(Rect(0, size.height / 2, size.width, size.height / 2)) = Vec4b(0,0,0,0);
+    bottomSpherical(Rect(0, size.height / 2, size.width, size.height / 2)) = 0;
 
     // the alpha channel in bottomSpherical is the result of pole removal/flow. this can in
     // some cases cause an alpha-channel discontinuity at the boundary of the image, which
@@ -660,7 +684,7 @@ void prepareBottomImagesThread(
   }
 }
 
-// similar to prepareBottomImagesThread but there is no pole removal
+// similar to prepareBottomImagesThread
 void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSphericals) {
 
   topSphericals.resize(rig.rigTopOnly.size());
@@ -670,12 +694,22 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
     const string extension = getImageFileExtension(cameraDir);
     const string topImageFilename = FLAGS_frame_number + "." + extension;
     const string topImagePath = cameraDir + "/" + topImageFilename;
+
     Mat topImage = imreadExceptionOnFail(topImagePath, CV_LOAD_IMAGE_UNCHANGED);
+		if (FLAGS_enable_pole_removal) {
+			const string poleMaskPath = FLAGS_bottom_pole_masks_dir + "/"
+				+ rig.rigTopOnly[i].id + ".tif";
+			Mat redMask = imread(poleMaskPath, CV_LOAD_IMAGE_COLOR);
+			if (!redMask.empty()) {
+				cutRedMaskOutOfAlphaChannel(topImage, redMask);
+			}
+		}
+
     const Camera& camera = rig.rigTopOnly[i];
     topSpherical.create(
       FLAGS_eqr_height * camera.getFov() / M_PI,
       FLAGS_eqr_width,
-      CV_8UC4);
+			CV_MAKE_TYPE(topImage.depth(), 4));
     bicubicRemapToSpherical(
       topSpherical,
       topImage,
@@ -690,13 +724,13 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
       FLAGS_interpupilary_dist);
 
     // alpha feather the top spherical image for flow purposes
-    if (topSpherical.type() != CV_8UC4) {
+    if (topSpherical.channels() != 4) {
       cvtColor(topSpherical, topSpherical, CV_BGR2BGRA);
     }
 
     // Remove lower half of projected image
     Size size = topSpherical.size();
-    topSpherical(Rect(0, size.height / 2, size.width, size.height / 2)) = Vec4b(0, 0, 0, 0);
+    topSpherical(Rect(0, size.height / 2, size.width, size.height / 2)) = 0;
 
     topSpherical = featherAlphaChannel(topSpherical, FLAGS_std_alpha_feather_size);
 
@@ -712,11 +746,18 @@ void prepareTopImagesThread(const RigDescription& rig, vector<Mat>& topSpherical
 void sharpenThread(Mat* sphericalImage) {
   const WrapBoundary<float> wrapB;
   const ReflectBoundary<float> reflectB;
-  Mat lowPassSphericalImage(sphericalImage->rows, sphericalImage->cols, CV_8UC3);
-  iirLowPass<WrapBoundary<float>, ReflectBoundary<float>, Vec3b>(
-    *sphericalImage, 0.25f, lowPassSphericalImage, wrapB, reflectB);
-  sharpenWithIirLowPass<Vec3b>(
-    *sphericalImage, lowPassSphericalImage, 1.0f + FLAGS_sharpenning);
+  Mat lowPassSphericalImage(sphericalImage->rows, sphericalImage->cols, CV_MAKE_TYPE(sphericalImage->depth(), 3));
+	if (sphericalImage->depth() == CV_8U) {
+		iirLowPass<WrapBoundary<float>, ReflectBoundary<float>, uchar>(
+			*sphericalImage, 0.25f, lowPassSphericalImage, wrapB, reflectB);
+		sharpenWithIirLowPass<uchar>(
+			*sphericalImage, lowPassSphericalImage, 1.0f + FLAGS_sharpenning);
+	} else {
+		iirLowPass<WrapBoundary<float>, ReflectBoundary<float>, float>(
+			*sphericalImage, 0.25f, lowPassSphericalImage, wrapB, reflectB);
+		sharpenWithIirLowPass<float>(
+			*sphericalImage, lowPassSphericalImage, 1.0f + FLAGS_sharpenning);
+	}
 }
 
 // If the un-padded height is odd and targetHeight is even, we can't do equal
@@ -738,7 +779,7 @@ void padToheight(Mat& unpaddedImage, const int targetHeight) {
 
 void splitAlphaMask(Mat& image, Mat& mask)
 {
-  CV_Assert(image.type() == CV_8UC4);
+  CV_Assert(image.channels() == 4);
   vector<Mat> channels(4);
   split(image, channels);
   mask = channels.back();
@@ -749,7 +790,7 @@ void splitAlphaMask(Mat& image, Mat& mask)
 
 void mergeAlphaMask(Mat& image, const Mat& mask)
 {
-  CV_Assert(image.type() == CV_8UC3 && mask.type() == CV_8UC1);
+  CV_Assert(image.channels() == 3 && mask.channels() == 1);
   // add alpha channel
   vector<Mat> channels(3);
   split(image, channels);
@@ -1049,7 +1090,7 @@ void renderStereoPanorama() {
 
   // depending on how things are handled, we might still have an alpha channel.
   // if so, flatten the image to 3 channel
-  if (sphericalImageL.type() != CV_8UC3) {
+  if (sphericalImageL.channels() == 4) {
     VLOG(1) << "Flattening from 4 channels to 3 channels";
     cvtColor(sphericalImageL, sphericalImageL, CV_BGRA2BGR);
     if (FLAGS_interpupilary_dist != 0)

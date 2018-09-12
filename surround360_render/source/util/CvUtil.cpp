@@ -212,35 +212,43 @@ void circleAlphaCut(Mat& imageBGRA, const float radius) {
 
 void cutRedMaskOutOfAlphaChannel(Mat& destBGRA, Mat& redMaskBGR) {
   assert(destBGRA.size() == redMaskBGR.size());
-  for (int y = 0; y < redMaskBGR.rows; ++y) {
-    for (int x = 0; x < redMaskBGR.cols; ++x) {
-      if (redMaskBGR.at<Vec3b>(y, x) == Vec3b(0, 0, 255)) {
-        destBGRA.at<Vec4b>(y, x)[3] = 0;
-      }
-    }
-  }
+
+	Mat mask;
+	extractChannel(redMaskBGR, mask, 2);
+	mask = (mask == 0); // invert
+	if (destBGRA.depth() != CV_8U) {
+		mask.convertTo(mask, destBGRA.depth(), 1 / 255.0f);
+	}
+	vector<Mat> topImageChannels;
+	split(destBGRA, topImageChannels);
+	topImageChannels.resize(4);
+	topImageChannels[3] = mask;
+	merge(topImageChannels, destBGRA);
 }
 
-Mat flattenLayersDeghostPreferBase(
+template <typename T>
+Mat flattenLayersDeghostPreferBaseImpl(
     const Mat& bottomLayer,
     const Mat& topLayer) {
 
-  Mat mergedImage(bottomLayer.size(), CV_8UC4);
+	using Vec4 = Vec<T, 4>;
+	float maxVal = CvMaxValue<T>::value;
+  Mat mergedImage(bottomLayer.size(), CV_MAKE_TYPE(bottomLayer.depth(), 4));
   for (int y = 0; y < bottomLayer.rows; ++y) {
     for (int x = 0; x < bottomLayer.cols; ++x) {
-      Vec4b baseColor = bottomLayer.at<Vec4b>(y, x);
-      Vec4b topColor = topLayer.at<Vec4b>(y, x);
+      Vec4 baseColor = bottomLayer.at<Vec4>(y, x);
+      Vec4 topColor = topLayer.at<Vec4>(y, x);
 
       const float colorDiff =
         (std::abs(baseColor[0] - topColor[0]) +
          std::abs(baseColor[1] - topColor[1]) +
-         std::abs(baseColor[2] - topColor[2])) / 255.0f;
+         std::abs(baseColor[2] - topColor[2])) / maxVal;
 
       static const float kColorDiffCoef = 5.0f;
       static const float kSoftmaxSharpness = 5.0f;
       static const float kBaseLayerBias = 2.0f;
       const float deghostCoef = tanhf(colorDiff * kColorDiffCoef);
-      const float alphaR = topColor[3] / 255.0f;
+      const float alphaR = topColor[3] / maxVal;
       const float alphaL = 1.0f - alphaR;
       const double expL = exp(kSoftmaxSharpness * alphaL * kBaseLayerBias);
       const double expR = exp(kSoftmaxSharpness * alphaR);
@@ -248,8 +256,8 @@ Mat flattenLayersDeghostPreferBase(
       const float softmaxL = float(expL / sumExp);
       const float softmaxR = 1.0f - softmaxL;
 
-      const unsigned char outAlpha = max(topColor[3], baseColor[3]);
-      mergedImage.at<Vec4b>(y, x) = Vec4b(
+      const T outAlpha = max(topColor[3], baseColor[3]);
+      mergedImage.at<Vec4>(y, x) = Vec4(
         float(baseColor[0]) * lerp(alphaL, softmaxL, deghostCoef) + float(topColor[0]) * lerp(alphaR, softmaxR, deghostCoef),
         float(baseColor[1]) * lerp(alphaL, softmaxL, deghostCoef) + float(topColor[1]) * lerp(alphaR, softmaxR, deghostCoef),
         float(baseColor[2]) * lerp(alphaL, softmaxL, deghostCoef) + float(topColor[2]) * lerp(alphaR, softmaxR, deghostCoef),
@@ -257,6 +265,18 @@ Mat flattenLayersDeghostPreferBase(
     }
   }
   return mergedImage;
+}
+
+Mat flattenLayersDeghostPreferBase(
+	const Mat& bottomLayer,
+	const Mat& topLayer) {
+	assert(bottomLayer.depth() == topLayer.depth());
+	if (bottomLayer.depth() == CV_8U) {
+		return flattenLayersDeghostPreferBaseImpl<uchar>(bottomLayer, topLayer);
+	}
+	else {
+		return flattenLayersDeghostPreferBaseImpl<float>(bottomLayer, topLayer);
+	}
 }
 
 vector<vector<float>> buildColorAdjustmentModel(
