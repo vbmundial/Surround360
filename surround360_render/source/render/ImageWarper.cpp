@@ -177,6 +177,7 @@ void bicubicRemapToSpherical(
       if (enableGroundDistortion) {
         float radius = (interpupilaryDist == 0) ? zeroParallaxDist : Camera::kNearInfinity;
         point = radius * unit;
+        // Bottom distortion correction 
         if (interpupilaryDist == 0 || camera.group == "bottom camera") { 
           Camera::Vector3 n(0, 0, 1);
           Camera::Vector3 p0(0, 0, -groundDistortionHeight);
@@ -184,6 +185,14 @@ void bicubicRemapToSpherical(
           if (planeDist > 0 && planeDist < radius) {
             point = planeDist * unit;
           }
+          // Top distortion correction in 2D case, TODO
+          /*else { // 
+            Camera::Vector3 p1(0, 0, groundDistortionHeight);
+            planeDist = p1.dot(n) / unit.dot(n);
+            if (planeDist > 0 && planeDist < radius) {
+                point = planeDist * unit;
+            }
+          }*/
         }
       }
 
