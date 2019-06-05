@@ -128,7 +128,7 @@ def parse_args():
     parser.add_argument('--save_raw', help='Save RAW images', action='store_true')
     parser.add_argument('--steps_unpack', help='Step 1: convert data in .bin files to RGB files', action='store_true',
                         required=False)
-    parser.add_argument('--steps_render', help='Step 2: render stereo panoramas', action='store_true', required=False, default=True)
+    parser.add_argument('--steps_render', help='Step 2: render stereo panoramas', action='store_true')
     parser.add_argument('--steps_metadata', help='Step 3: copy metadata on output images', action='store_true')
     parser.add_argument('--steps_ffmpeg', help='Step 4: create video output', action='store_true', required=False)
     parser.add_argument('--enable_top', help='Enable top camera', action='store_true')
