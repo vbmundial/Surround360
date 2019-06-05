@@ -14,7 +14,7 @@
         "msvc_x64_x64"
       ],
       "buildRoot": "${env.USERPROFILE}/CMakeBuilds/${workspaceHash}/build/${name}",
-      "installRoot": "${projectDir}/bin/Debug",
+      "installRoot": "${projectDir}/Debug",
       "cmakeCommandArgs": "",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
@@ -33,7 +33,7 @@
         },
         {
           "name": "Eigen3_DIR",
-          "value": "${env.LibsDir}/Eigen3/share/eigen3/cmake"
+          "value": "${env.LibsDir}/Eigen-3.3.5/cmake"
         },
         {
           "name": "OpenCV_DIR",
@@ -55,7 +55,7 @@
         "msvc_x64_x64"
       ],
       "buildRoot": "${env.USERPROFILE}/CMakeBuilds/${workspaceHash}/build/${name}",
-      "installRoot": "${projectDir}/bin",
+      "installRoot": "${projectDir}",
       "cmakeCommandArgs": "",
       "buildCommandArgs": "-v",
       "ctestCommandArgs": "",
